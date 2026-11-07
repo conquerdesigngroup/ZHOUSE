@@ -22,6 +22,10 @@
 <label class="tog"><input type="checkbox" id="tShadows" checked> Sun shadows</label>
 <div class="row"><span class="lbl">Wall cutaway</span><input type="range" id="cutRange" min="0.1" max="1" step="0.01" value="1" aria-label="Wall cutaway"><span id="cutVal" class="val">100%</span></div>
 </div>
+<div class="group"><div class="g-title">Lighting</div>
+<div class="row"><span class="lbl">Time of day</span><input type="range" id="timeRange" min="5" max="21" step="0.25" value="15" aria-label="Time of day"><span id="timeVal" class="val">3:00 PM</span></div>
+<label class="tog"><input type="checkbox" id="tLights"> Interior lights on<kbd>I</kbd></label>
+<p class="hint">The sun follows a north-up plan: morning light from the east, afternoon from the west. Lights use the fixtures you place in Edit → Electrical, plus a soft light in any room that has none.</p></div>
 <div class="group"><div class="g-title">Walkthrough</div>
 <div class="row"><span class="lbl">Eye height</span><input type="range" id="eyeRange" min="3.5" max="6.8" step="0.1" aria-label="Eye height"><span id="eyeVal" class="val"></span></div>
 <div class="row"><span class="lbl">Walk speed</span><input type="range" id="spdRange" min="2" max="14" step="0.5" value="6" aria-label="Walk speed"><span id="spdVal" class="val"></span></div>
@@ -93,6 +97,7 @@
 <tr><td><kbd>E</kbd></td><td>Open/close the door you're facing</td></tr>
 <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Ceiling height −/+ 3"</td></tr>
 <tr><td><kbd>C</kbd> / <kbd>L</kbd></td><td>Ceilings / labels</td></tr>
+<tr><td><kbd>I</kbd></td><td>Interior lights on/off</td></tr>
 <tr><td><kbd>P</kbd></td><td>Plan editor</td></tr>
 <tr><td><kbd>K</kbd></td><td>Design check</td></tr>
 <tr><td><kbd>V</kbd> / <kbd>B</kbd> / <kbd>M</kbd></td><td>Select / draw walls / measure (in the plan)</td></tr>

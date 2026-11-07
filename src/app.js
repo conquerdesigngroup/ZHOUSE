@@ -132,9 +132,9 @@ function cyl(rt,rb,h,c,o){var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,
 
 var house=null,vert=null,ceilG=null,colSegs=[],doorObjs={},pickables=[];
 var doorState={};
-var view={mode:'orbit',ceilings:false,cut:1,labels:true,shadows:true,speed:6,snap:0.25,issues:true,dims:true,elec:true};
+var view={mode:'orbit',ceilings:false,cut:1,labels:true,shadows:true,speed:6,snap:0.25,issues:true,dims:true,elec:true,time:15,lightsOn:false};
 (function(){var v=lsGet(LS_VIEW);if(v){try{Object.assign(view,JSON.parse(v));view.mode='orbit';}catch(e){}}})();
-function saveView(){lsSet(LS_VIEW,JSON.stringify({ceilings:view.ceilings,cut:view.cut,labels:view.labels,shadows:view.shadows,speed:view.speed,snap:view.snap,issues:view.issues,dims:view.dims,elec:view.elec}));}
+function saveView(){lsSet(LS_VIEW,JSON.stringify({ceilings:view.ceilings,cut:view.cut,labels:view.labels,shadows:view.shadows,speed:view.speed,snap:view.snap,issues:view.issues,dims:view.dims,elec:view.elec,time:view.time,lightsOn:view.lightsOn}));}
 
 function disposeTree(o){o.traverse(function(m){if(m.geometry)m.geometry.dispose();});}
 function tagSel(obj,sel){obj.traverse(function(m){if(m.isMesh){m.userData.sel=sel;pickables.push(m);}});}
@@ -158,7 +158,7 @@ function rebuild(){
   scene.add(house);
   var s=Math.max(bb.w,bb.d)/2+14;var sc=sun.shadow.camera;sc.left=-s;sc.right=s;sc.top=s;sc.bottom=-s;sc.near=1;sc.far=320;sc.updateProjectionMatrix();
   sun.target.position.set(bb.cx,0,bb.cy);sun.position.set(bb.cx-30,80,bb.cy+40);
-  buildLabels();applyViewState();updateDoors(0);buildIssues3D();
+  buildLights();buildLabels();applyViewState();updateDoors(0);buildIssues3D();applyLighting();
 }
 function buildWall(w){
   var L=segLen(w);if(L<0.05)return;var ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L,rot=-Math.atan2(uy,ux),H=wallHeight(w),t=w.t||0.33;
@@ -166,7 +166,10 @@ function buildWall(w){
   function piece(a,b,y0,y1,col){if(b-a<0.01||y1-y0<0.01)return;var a2=a===0?a-t/2:a,b2=b>=L-1e-6?b+t/2:b;var len=b2-a2,s=(a2+b2)/2;
     var fin=w.finish&&w.finish!=='paint'?w.finish:null,pm=fin?texMat(fin,w.color||FINISH_COL[fin]||'#cccccc',len,y1-y0):(w.color?mat(w.color,{roughness:0.92}):wm);
     var m=bx(len,y1-y0,t,pm);m.position.set(w.x1+ux*s,y0+(y1-y0)/2,w.y1+uy*s);m.rotation.y=rot;vert.add(m);tagSel(m,{type:'wall',id:w.id});
-    if(col)colSegs.push({x1:w.x1+ux*a2,y1:w.y1+uy*a2,x2:w.x1+ux*b2,y2:w.y1+uy*b2,r:t/2});}
+    if(col)colSegs.push({x1:w.x1+ux*a2,y1:w.y1+uy*a2,x2:w.x1+ux*b2,y2:w.y1+uy*b2,r:t/2});
+    if(y0===0||y1===H)[1,-1].forEach(function(sd){var nx=-uy*sd,ny=ux*sd,mx=w.x1+ux*s,my=w.y1+uy*s;if(!roomAt(mx+nx*(t/2+0.4),my+ny*(t/2+0.4)))return;
+      if(y0===0&&b2-a2>0.2){var bb=bx(len,0.33,0.05,TRIM,{roughness:0.5});bb.castShadow=false;bb.position.set(mx+nx*(t/2+0.025),0.165,my+ny*(t/2+0.025));bb.rotation.y=rot;vert.add(bb);}
+      if(y1===H&&b2-a2>0.2){var cr=bx(len,0.25,0.12,TRIM,{roughness:0.5});cr.castShadow=false;cr.position.set(mx+nx*(t/2+0.06),H-0.125,my+ny*(t/2+0.06));cr.rotation.y=rot;ceilG.add(cr);}});}
   var cur=0;wallOpenings(w).forEach(function(o){piece(cur,o.a,0,H,true);if(o.bot>0.05)piece(o.a,o.b,0,o.bot,true);if(o.top<H)piece(o.a,o.b,o.top,H,false);cur=o.b;});
   piece(cur,L,0,H,true);
 }
@@ -177,6 +180,8 @@ function buildWindow(wi){
   var fc='#2b2836',ft=0.18;
   [[W,ft,0,wi.sill+ft/2],[W,ft,0,wi.head-ft/2],[ft,h,-W/2+ft/2,wi.sill+h/2],[ft,h,W/2-ft/2,wi.sill+h/2],[0.08,h,0,wi.sill+h/2]].forEach(function(p){var m=bx(p[0],p[1],t+0.04,fc);m.position.set(p[2],p[3],0);g.add(m);});
   var sill=bx(W+0.3,0.08,t+0.35,'#d9d4cb');sill.position.y=wi.sill-0.04;g.add(sill);
+  [1,-1].forEach(function(sd){if(!roomAt(cx-uy*sd*(t/2+0.4),cz+ux*sd*(t/2+0.4)))return;var z=sd*(t/2+0.025);
+    [[W+0.58,0.29,0,wi.head+0.145],[0.29,h,-W/2-0.145,wi.sill+h/2],[0.29,h,W/2+0.145,wi.sill+h/2],[W+0.3,0.3,0,wi.sill-0.23]].forEach(function(p){var m=bx(p[0],p[1],0.05,TRIM,{roughness:0.5});m.castShadow=false;m.position.set(p[2],p[3],z);g.add(m);});});
   vert.add(g);tagSel(g,{type:'window',id:wi.id});
 }
 function buildDoor(d){
@@ -197,7 +202,8 @@ function buildDoor(d){
     [-0.1,0.1].forEach(function(z){var k=new THREE.Mesh(new THREE.SphereGeometry(0.1,12,10),mat('#d6bf7a',{metalness:0.8,roughness:0.3}));k.position.set(W-0.4,3,z);pivot.add(k);});
     vert.add(pivot);doorObjs[d.id]={d:d,type:'swing',pivot:pivot,base:base,W:W};tagSel(pivot,{type:'door',id:d.id});
     // jamb casing
-    [0,W].forEach(function(s){var j=bx(0.12,H,t+0.1,'#d8d3ca');j.position.set(d.x1+ux*s,H/2,d.y1+uy*s);j.rotation.y=base;vert.add(j);});
+    [-0.145,W+0.145].forEach(function(s){var j=bx(0.29,H+0.29,t+0.1,TRIM,{roughness:0.5});j.position.set(d.x1+ux*s,(H+0.29)/2,d.y1+uy*s);j.rotation.y=base;vert.add(j);});
+    var hd=bx(W+0.58,0.29,t+0.1,TRIM,{roughness:0.5});hd.position.set(d.x1+ux*W/2,H+0.145,d.y1+uy*W/2);hd.rotation.y=base;vert.add(hd);
   }
 }
 function buildItem(it){
@@ -262,11 +268,11 @@ function updateLabels(){var show=view.labels&&view.mode==='orbit';var W=host.cli
 /* ---------- view state ---------- */
 function applyViewState(){var walk=view.mode==='walk';if(!house)return;
   ceilG.visible=walk||(view.ceilings&&view.cut>=0.999);vert.scale.y=walk?1:view.cut;sun.castShadow=view.shadows;
-  interior.intensity=walk?0.55:0;document.body.classList.toggle('walk',walk);
+  document.body.classList.toggle('walk',walk);applyLighting();
   $('#mOrbit').classList.toggle('on',!walk);$('#mWalk').classList.toggle('on',walk);}
 function syncViewUI(){var S=model.specs;$('#ceilRange').value=S.ceiling;$('#ceilVal').textContent=fmt(S.ceiling);$('#tCeil').checked=view.ceilings;$('#tLabels').checked=view.labels;$('#tShadows').checked=view.shadows;
   $('#cutRange').value=view.cut;$('#cutVal').textContent=Math.round(view.cut*100)+'%';$('#eyeRange').value=S.eye;$('#eyeVal').textContent=fmt(S.eye);$('#spdRange').value=view.speed;$('#spdVal').textContent=view.speed+' ft/s';
-  $('#snapSel').value=String(view.snap);$('#tIssues').checked=view.issues!==false;$('#tDims').checked=view.dims!==false;$('#tElec').checked=view.elec!==false;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
+  $('#snapSel').value=String(view.snap);$('#tIssues').checked=view.issues!==false;$('#tDims').checked=view.dims!==false;$('#tElec').checked=view.elec!==false;$('#timeRange').value=view.time==null?15:view.time;$('#timeVal').textContent=fmtTime(view.time==null?15:view.time);$('#tLights').checked=!!view.lightsOn;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
 
 /* ---------- orbit camera ---------- */
 var orbit={tx:15,ty:0,tz:21,r:80,theta:Math.PI*0.8,phi:0.9},tween=null;
@@ -370,6 +376,7 @@ document.addEventListener('keydown',function(e){
     case 'KeyL':view.labels=!view.labels;saveView();syncViewUI();break;
     case 'KeyP':setEditing(!document.body.classList.contains('editing'));break;
     case 'KeyK':showTab('check');break;
+    case 'KeyI':toggleLights();break;
     case 'KeyR':if(sel&&sel.type==='item'){var ro=getObj();if(ro){pushUndo();ro.rot=((ro.rot||0)+90)%360;afterChange();}}break;
     case 'KeyV':setTool('select');break;case 'KeyB':setTool('wall');break;case 'KeyM':setTool('measure');break;
     case 'KeyH':$('#help').hidden=!$('#help').hidden;break;
@@ -707,6 +714,31 @@ function buildFixture(f){var D=FIX[f.kind];if(!D)return;var a=(f.rot||0)*Math.PI
     g.add(m);if(LIGHT_KINDS.indexOf(f.kind)>=0)g.userData.glow=m;}
   vert.add(g);if(D.mount==='ceil')g.userData.ceil=true;tagSel(g,{type:'fixture',id:f.id});fixtureObjs.push({f:f,g:g});}
 var fixtureObjs=[];
+
+/* ---------- lighting: time of day + interior lights ---------- */
+var lightsG=null,TRIM='#f4f2ec';
+var hemi=scene.children.filter(function(o){return o.isHemisphereLight;})[0],amb=scene.children.filter(function(o){return o.isAmbientLight;})[0];
+function fmtTime(t){var h=Math.floor(t),m=Math.round((t-h)*60);if(m===60){h++;m=0;}var ap=h>=12&&h<24?'PM':'AM',h12=h%12||12;return h12+':'+(m<10?'0':'')+m+' '+ap;}
+// Sun path for a north-up plan: rises in the east (+x), crosses the south (+y), sets in the west.
+function applyLighting(){if(!house)return;var t=view.time==null?15:view.time,th=Math.PI*(t-6)/12,el=Math.sin(th)*Math.PI/180*62,day=clamp(Math.sin(th)*2.2,0,1),bb=bounds();
+  var dx=Math.cos(th),dz=0.55+0.45*Math.sin(th);var ce=Math.cos(Math.max(el,0.02)),R=110;
+  sun.position.set(bb.cx+dx*ce*R,Math.max(Math.sin(el),0.02)*R,bb.cy+dz*ce*R);sun.target.position.set(bb.cx,0,bb.cy);
+  var warm=new THREE.Color(0xffb46b),noon=new THREE.Color(0xfff3e2);sun.color.copy(warm).lerp(noon,clamp(Math.sin(el)*2.5,0,1));sun.intensity=0.95*day;
+  hemi.intensity=0.16+0.56*day;amb.intensity=0.08+0.12*day;
+  var night=new THREE.Color('#05040a'),dayBg=new THREE.Color('#0c0a14');scene.background.copy(night).lerp(dayBg,day);scene.fog.color.copy(scene.background);
+  var on=!!view.lightsOn;if(lightsG)lightsG.visible=on;
+  fixtureObjs.forEach(function(o){var gl=o.g.userData.glow;if(gl&&gl.material&&gl.material.emissive)gl.material.emissiveIntensity=on?1.4:0.15;});
+  interior.intensity=view.mode==='walk'?(on?0.15:0.55*(0.4+0.6*day)):0;}
+function buildLights(){if(lightsG){scene.remove(lightsG);}lightsG=new THREE.Group();scene.add(lightsG);var n=0,MAX=18,lit={};
+  function pl(x,y,z,i){if(n>=MAX)return;var L=new THREE.PointLight(0xffe4bf,i,22,2);L.position.set(x,y,z);lightsG.add(L);n++;}
+  fixtureObjs.forEach(function(o){var f=o.f;if(LIGHT_KINDS.indexOf(f.kind)<0)return;var r=roomAt(f.x,f.y);if(r)lit[r.id]=1;var C=fixCeil(f);
+    pl(f.x,f.kind==='sconce'?fixH(f)+0.3:f.kind==='pendant'?C-2.6:C-0.6,f.y,f.kind==='recessed'?0.55:f.kind==='sconce'?0.35:0.75);});
+  // Rooms with no light placed still get a soft ceiling light so "lights on" works on any plan.
+  model.rooms.forEach(function(r){if(lit[r.id])return;pl(r.x+r.w/2,roomCeil(r)-0.6,r.y+r.d/2,Math.min(0.85,0.3+r.w*r.d/400));});
+  lightsG.visible=!!view.lightsOn;}
+$('#timeRange').addEventListener('input',function(e){view.time=parseFloat(e.target.value);$('#timeVal').textContent=fmtTime(view.time);applyLighting();saveView();});
+$('#tLights').onchange=function(e){view.lightsOn=e.target.checked;saveView();applyLighting();};
+function toggleLights(){view.lightsOn=!view.lightsOn;$('#tLights').checked=view.lightsOn;saveView();applyLighting();toast(view.lightsOn?'Interior lights on':'Interior lights off',1200);}
 $('#tElec').onchange=function(e){view.elec=e.target.checked;saveView();renderPlan();applyViewState();};
 FIELDS.fixture=[{k:'kind',label:'Type',kind:'select',options:FIX_ORDER.map(function(k){return [k,FIX[k].label];})},LEN('h','Mount height',{opt:true,ph:function(o){return FIX[o.kind]&&FIX[o.kind].mount==='ceil'?'at the ceiling':'default '+fmt(FIX[o.kind]&&FIX[o.kind].h||0);}}),LEN('x','X'),LEN('y','Y'),{k:'rot',label:'Facing °',kind:'num'},{k:'note',label:'Circuit / notes',kind:'area',ph:'e.g. 20A kitchen circuit 3, dimmer, 3-way'}];
 
