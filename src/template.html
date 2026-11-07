@@ -11,7 +11,7 @@
 <button id="helpBtn" class="icon-btn" aria-label="Keyboard shortcuts" title="Shortcuts (H)">?</button>
 </header>
 <aside id="side">
-<div class="tabs" role="tablist"><button data-tab="view" class="on">View</button><button data-tab="edit">Edit</button><button data-tab="specs">Specs</button></div>
+<div class="tabs" role="tablist"><button data-tab="view" class="on">View</button><button data-tab="edit">Edit</button><button data-tab="specs">Specs</button><button data-tab="check">Check <span id="ckCount" class="ck-count"></span></button></div>
 <section class="pane on" data-pane="view">
 <div class="group"><div class="g-title">Ceiling height</div>
 <div class="row"><input type="range" id="ceilRange" min="7" max="16" step="0.25" aria-label="Ceiling height"><span id="ceilVal" class="val"></span></div>
@@ -22,6 +22,10 @@
 <label class="tog"><input type="checkbox" id="tShadows" checked> Sun shadows</label>
 <div class="row"><span class="lbl">Wall cutaway</span><input type="range" id="cutRange" min="0.1" max="1" step="0.01" value="1" aria-label="Wall cutaway"><span id="cutVal" class="val">100%</span></div>
 </div>
+<div class="group"><div class="g-title">Lighting</div>
+<div class="row"><span class="lbl">Time of day</span><input type="range" id="timeRange" min="5" max="21" step="0.25" value="15" aria-label="Time of day"><span id="timeVal" class="val">3:00 PM</span></div>
+<label class="tog"><input type="checkbox" id="tLights"> Interior lights on<kbd>I</kbd></label>
+<p class="hint">The sun follows a north-up plan: morning light from the east, afternoon from the west. Lights use the fixtures you place in Edit → Electrical, plus a soft light in any room that has none.</p></div>
 <div class="group"><div class="g-title">Walkthrough</div>
 <div class="row"><span class="lbl">Eye height</span><input type="range" id="eyeRange" min="3.5" max="6.8" step="0.1" aria-label="Eye height"><span id="eyeVal" class="val"></span></div>
 <div class="row"><span class="lbl">Walk speed</span><input type="range" id="spdRange" min="2" max="14" step="0.5" value="6" aria-label="Walk speed"><span id="spdVal" class="val"></span></div>
@@ -39,15 +43,39 @@
 <section class="pane" data-pane="edit">
 <div class="group"><div class="g-title">Add</div>
 <div class="grid2"><button class="btn" data-add="wall">+ Wall</button><button class="btn" data-add="door">+ Door</button><button class="btn" data-add="window">+ Window</button><button class="btn" data-add="room">+ Room</button></div>
-<div class="row"><select id="itemKind" aria-label="Item type"></select><button class="btn" data-add="item" style="flex:1">+ Item</button></div>
 <div class="row"><span class="lbl">Snap to</span><select id="snapSel" aria-label="Snap increment"><option value="0.0833333">1"</option><option value="0.25" selected>3"</option><option value="0.5">6"</option><option value="1">1'</option><option value="0">Off</option></select></div>
 <div class="row2"><button class="btn" id="undoBtn">Undo</button><button class="btn" id="redoBtn">Redo</button></div>
 <p class="hint">Drag things in the plan to move them, and drag the round handles to resize. Doors and windows snap to the nearest wall. You can type lengths as <b>9.5</b>, <b>9'6"</b> or <b>114"</b>.</p>
 </div>
+<div class="group"><div class="g-title">Electrical &amp; HVAC</div>
+<div id="fixBtns" class="fix-grid"></div>
+<label class="tog"><input type="checkbox" id="tElec" checked> Show electrical layer</label>
+<p class="hint">Pick a fixture, then click in the plan to place as many as you need; outlets and switches snap to the nearest wall. Esc when done. The Check tab tests outlet spacing, GFCI spots, switches and smoke alarms.</p></div>
+<div class="group"><div class="g-title">Furniture catalog</div>
+<input type="search" id="catSearch" class="cat-search" placeholder="Search: queen bed, washer, car…" aria-label="Search the catalog">
+<div id="catChips" class="chips"></div>
+<div id="catalog" class="cat-grid"></div>
+<p class="hint">Click to add in the middle of the plan, or drag a card onto the plan. Sizes are typical real-world sizes; change them in the selection below.</p></div>
 <div class="group"><div class="g-title" id="inspTitle">Selection</div><div id="inspector"></div></div>
+</section>
+<section class="pane" data-pane="check">
+<div class="group"><div class="g-title">Design check</div>
+<p class="hint" style="margin-top:0">Flags door swings that hit things, tight walkways, and fixture clearances while you edit. Click an item to jump to it in the plan.</p>
+<label class="tog"><input type="checkbox" id="tIssues" checked> Show problem areas in the plan and 3D</label>
+<div id="checkList"></div></div>
 </section>
 <section class="pane" data-pane="specs">
 <div id="specsBox"></div>
+<div class="group"><div class="g-title">Plan options</div>
+<div class="row"><span class="lbl">Working on</span><select id="slotSel" aria-label="Plan option" style="flex:1;min-width:0"></select></div>
+<div class="row2"><button class="btn" id="slotNewBtn">New option</button><button class="btn" id="slotCmpBtn">Compare</button></div>
+<div id="slotNew" class="slot-box" hidden>
+<div class="row"><span class="lbl">Name</span><input id="slotName" type="text" class="txt" placeholder="Option B" maxlength="60"></div>
+<div class="row"><span class="lbl">Start from</span><select id="slotStart" style="flex:1;min-width:0"><option value="copy">Copy of this plan</option><option value="garage">Two-car garage, 24' × 24'</option><option value="sketch">Original sketch</option><option value="blank">Empty lot</option></select></div>
+<div class="row2"><button class="btn primary" id="slotCreate">Create</button><button class="btn" id="slotNewCancel">Cancel</button></div></div>
+<div id="slotCmp" class="slot-box" hidden><div class="row"><span class="lbl">Compare with</span><select id="slotCmpSel" style="flex:1;min-width:0"></select></div><div id="cmpOut"></div></div>
+<div class="row2"><button class="btn" id="printBtn">Print / PDF</button><button class="btn danger" id="slotDelBtn">Delete option</button></div>
+<p class="hint">Keep a few versions side by side, like a bigger kitchen in one and an extra bath in another, then compare them. The garage starts as its own option.</p></div>
 <div class="group"><div class="g-title">Plan data</div>
 <div class="row2"><button class="btn" id="exportBtn">Export JSON</button><button class="btn" id="importBtn">Import JSON</button></div>
 <div class="row2"><button class="btn danger" id="resetBtn">Reset to sketch</button><button class="btn" id="fitBtn2">Frame house</button></div>
@@ -57,6 +85,9 @@
 </aside>
 <main id="stage">
 <div id="planWrap"><svg id="plan" role="img" aria-label="Editable floor plan"></svg>
+<div class="plan-tools"><div class="seg" role="group" aria-label="Plan tool"><button data-tool="select" class="on">Select<kbd>V</kbd></button><button data-tool="wall">Draw walls<kbd>B</kbd></button><button data-tool="measure">Measure<kbd>M</kbd></button></div>
+<select id="wallType" aria-label="New wall type"><option value="int">Interior wall</option><option value="ext">Exterior wall</option></select>
+<label class="tog mini"><input type="checkbox" id="tDims" checked> Dimensions</label></div>
 <button class="btn plan-fit" id="fitPlan">Fit</button>
 <div class="plan-hint">Scroll to zoom · drag empty space to pan · Del removes</div></div>
 <div id="view3d"><div id="labels"></div>
@@ -76,8 +107,13 @@
 <tr><td><kbd>E</kbd></td><td>Open/close the door you're facing</td></tr>
 <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Ceiling height −/+ 3"</td></tr>
 <tr><td><kbd>C</kbd> / <kbd>L</kbd></td><td>Ceilings / labels</td></tr>
+<tr><td><kbd>I</kbd></td><td>Interior lights on/off</td></tr>
 <tr><td><kbd>P</kbd></td><td>Plan editor</td></tr>
+<tr><td><kbd>K</kbd></td><td>Design check</td></tr>
+<tr><td><kbd>V</kbd> / <kbd>B</kbd> / <kbd>M</kbd></td><td>Select / draw walls / measure (in the plan)</td></tr>
+<tr><td>While drawing</td><td>Type a length, then <kbd>Enter</kbd> · <kbd>Alt</kbd> for any angle · <kbd>Esc</kbd> to stop</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></td><td>Undo / redo</td></tr>
+<tr><td><kbd>R</kbd></td><td>Rotate the selected item 90°</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>D</kbd> · <kbd>Del</kbd></td><td>Duplicate · delete the selection</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>S</kbd></td><td>Save</td></tr>
 <tr><td><kbd>\</kbd></td><td>Toggle side panel</td></tr>

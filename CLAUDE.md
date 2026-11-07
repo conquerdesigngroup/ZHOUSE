@@ -41,10 +41,11 @@ So:
   in the built output (a bundler is fine *if* it still emits that exact single-file shape).
 - `app.js` placeholders `__HEAD__` and `__DEFAULT__` are filled by build.mjs. Don't hand-edit them.
 - Never write a literal closing script tag in app.js; use `<\/script>` (build fails otherwise).
-- Outside claude.ai, `window.claude` doesn't exist: Save is disabled and edits persist to
-  `localStorage` only (`house3d-draft-v1`). Export/Import JSON is the portable path.
-  If you deploy this elsewhere and want real saving, replace `save()`/`artifactApi` with a backend
-  (e.g. a POST of `model` JSON) — the rest of the app only needs `model`.
+- Outside claude.ai (e.g. on Vercel), Save writes the current **plan option** ("slot") through
+  `api/plan.js` to Vercel Blob when the deployment has `BLOB_READ_WRITE_TOKEN` and `SAVE_PASSCODE`;
+  otherwise options live in this browser's `localStorage` (`house3d-slots-v1`). Unsaved edits are a
+  draft in `house3d-draft-v1`, keyed to the slot version they started from. `npm run dev` serves the
+  same API from `.dev-plans/` with passcode `dev`.
 
 ## Data model (units: feet; plan X = east, plan Y = south; north is up / -Y)
 
