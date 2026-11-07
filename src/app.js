@@ -26,6 +26,7 @@ var LS_DRAFT='house3d-draft-v1', LS_VIEW='house3d-view-v1';
 function normalize(m){
   m.specs=Object.assign({name:'Residence',ceiling:9,doorH:6.67,extT:0.5,intT:0.33,eye:5.4,wallColor:'#ece8e1'},m.specs||{});
   ['walls','doors','windows','rooms','items'].forEach(function(k){if(!Array.isArray(m[k]))m[k]=[];});
+  if(!Array.isArray(m.checkIgnore))m.checkIgnore=[];
 }
 var COLL={wall:'walls',door:'doors',window:'windows',room:'rooms',item:'items'};
 function uid(p){var all={};['walls','doors','windows','rooms','items'].forEach(function(k){model[k].forEach(function(o){all[o.id]=1;});});var i=1;while(all[p+i])i++;return p+i;}
@@ -88,9 +89,9 @@ function cyl(rt,rb,h,c,o){var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,
 
 var house=null,vert=null,ceilG=null,colSegs=[],doorObjs={},pickables=[];
 var doorState={};
-var view={mode:'orbit',ceilings:false,cut:1,labels:true,shadows:true,speed:6,snap:0.25};
+var view={mode:'orbit',ceilings:false,cut:1,labels:true,shadows:true,speed:6,snap:0.25,issues:true};
 (function(){var v=lsGet(LS_VIEW);if(v){try{Object.assign(view,JSON.parse(v));view.mode='orbit';}catch(e){}}})();
-function saveView(){lsSet(LS_VIEW,JSON.stringify({ceilings:view.ceilings,cut:view.cut,labels:view.labels,shadows:view.shadows,speed:view.speed,snap:view.snap}));}
+function saveView(){lsSet(LS_VIEW,JSON.stringify({ceilings:view.ceilings,cut:view.cut,labels:view.labels,shadows:view.shadows,speed:view.speed,snap:view.snap,issues:view.issues}));}
 
 function disposeTree(o){o.traverse(function(m){if(m.geometry)m.geometry.dispose();});}
 function tagSel(obj,sel){obj.traverse(function(m){if(m.isMesh){m.userData.sel=sel;pickables.push(m);}});}
@@ -113,7 +114,7 @@ function rebuild(){
   scene.add(house);
   var s=Math.max(bb.w,bb.d)/2+14;var sc=sun.shadow.camera;sc.left=-s;sc.right=s;sc.top=s;sc.bottom=-s;sc.near=1;sc.far=320;sc.updateProjectionMatrix();
   sun.target.position.set(bb.cx,0,bb.cy);sun.position.set(bb.cx-30,80,bb.cy+40);
-  buildLabels();applyViewState();updateDoors(0);
+  buildLabels();applyViewState();updateDoors(0);buildIssues3D();
 }
 function buildWall(w){
   var L=segLen(w);if(L<0.05)return;var ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L,rot=-Math.atan2(uy,ux),H=wallHeight(w),t=w.t||0.33;
@@ -213,7 +214,7 @@ function applyViewState(){var walk=view.mode==='walk';if(!house)return;
   $('#mOrbit').classList.toggle('on',!walk);$('#mWalk').classList.toggle('on',walk);}
 function syncViewUI(){var S=model.specs;$('#ceilRange').value=S.ceiling;$('#ceilVal').textContent=fmt(S.ceiling);$('#tCeil').checked=view.ceilings;$('#tLabels').checked=view.labels;$('#tShadows').checked=view.shadows;
   $('#cutRange').value=view.cut;$('#cutVal').textContent=Math.round(view.cut*100)+'%';$('#eyeRange').value=S.eye;$('#eyeVal').textContent=fmt(S.eye);$('#spdRange').value=view.speed;$('#spdVal').textContent=view.speed+' ft/s';
-  $('#snapSel').value=String(view.snap);$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
+  $('#snapSel').value=String(view.snap);$('#tIssues').checked=view.issues!==false;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
 
 /* ---------- orbit camera ---------- */
 var orbit={tx:15,ty:0,tz:21,r:80,theta:Math.PI*0.8,phi:0.9},tween=null;
@@ -315,6 +316,7 @@ document.addEventListener('keydown',function(e){
     case 'KeyC':view.ceilings=!view.ceilings;saveView();syncViewUI();applyViewState();break;
     case 'KeyL':view.labels=!view.labels;saveView();syncViewUI();break;
     case 'KeyP':setEditing(!document.body.classList.contains('editing'));break;
+    case 'KeyK':showTab('check');break;
     case 'KeyH':$('#help').hidden=!$('#help').hidden;break;
     case 'BracketLeft':setCeiling(model.specs.ceiling-0.25);break;case 'BracketRight':setCeiling(model.specs.ceiling+0.25);break;
     case 'Backslash':toggleSide();break;
@@ -332,7 +334,7 @@ function undo(){if(!undoStack.length)return toast('Nothing to undo');redoStack.p
 function redo(){if(!redoStack.length)return toast('Nothing to redo');undoStack.push(JSON.stringify(model));model=JSON.parse(redoStack.pop());validateSel();afterChange();}
 var rebuildQueued=false;
 function scheduleRebuild(){rebuildQueued=true;}
-function afterChange(){scheduleRebuild();renderPlan();renderInspector();renderSpecs();syncViewUI();updateDirty();}
+function afterChange(){scheduleRebuild();renderPlan();renderInspector();renderSpecs();renderChecks();syncViewUI();updateDirty();}
 function updateDirty(){var cur=JSON.stringify(model),dirty=cur!==savedJSON;var s=$('#saveState');s.textContent=dirty?(artifactApi?'Unsaved changes':'Edits kept in this browser'):'Saved';s.classList.toggle('dirty',dirty);
   $('#saveBtn').disabled=!dirty||!artifactApi;lsSet(LS_DRAFT,dirty?JSON.stringify({base:EMBED_HASH,model:model}):null);}
 function setCeiling(v){v=clamp(r3(v),6,30);if(v===model.specs.ceiling)return;pushUndo();model.specs.ceiling=v;afterChange();toast('Ceiling height '+fmt(v),1200);}
@@ -489,6 +491,7 @@ function renderPlan(){if(!document.body.classList.contains('editing'))return;var
       h.push('<line x1="'+d.x1+'" y1="'+d.y1+'" x2="'+r3(tx)+'" y2="'+r3(ty)+'" stroke="'+col+'" stroke-width="'+sw(2.2)+'"/><path d="M'+d.x2+' '+d.y2+' A'+W+' '+W+' 0 0 '+sweep+' '+r3(tx)+' '+r3(ty)+'" fill="none" stroke="'+col+'" stroke-width="'+sw(1)+'" stroke-dasharray="'+sw(4)+' '+sw(3)+'"/>');}
     h.push('<line data-type="door" data-id="'+d.id+'" x1="'+d.x1+'" y1="'+d.y1+'" x2="'+d.x2+'" y2="'+d.y2+'" stroke="transparent" stroke-width="'+Math.max(t+0.4,0.8)+'"/>');});
   model.rooms.forEach(function(r){var fs=Math.max(0.55,Math.min(1.1,r.w/9));h.push('<text x="'+(r.x+r.w/2)+'" y="'+(r.y+r.d/2)+'" font-size="'+fs.toFixed(2)+'" text-anchor="middle" fill="#ffffff" font-weight="600" font-family="Space Grotesk, sans-serif" pointer-events="none">'+esc(r.name)+'</text><text x="'+(r.x+r.w/2)+'" y="'+(r.y+r.d/2+fs*1.1)+'" font-size="'+(fs*0.7).toFixed(2)+'" text-anchor="middle" fill="#2de2e6" font-family="JetBrains Mono, monospace" pointer-events="none">'+esc(fmt(r.w)+' × '+fmt(r.d))+'</text>');});
+  h.push(planIssueSVG(k));
   var o=getObj(),hr=(7*k).toFixed(3),hd=function(name,x,y){h.push('<circle data-handle="'+name+'" cx="'+r3(x)+'" cy="'+r3(y)+'" r="'+hr+'" fill="#0c0a14" stroke="#4dff9a" stroke-width="'+sw(2)+'" style="cursor:grab"/>');};
   if(o){if(sel.type==='wall'||sel.type==='door'||sel.type==='window'){hd('p1',o.x1,o.y1);hd('p2',o.x2,o.y2);
       if(sel.type==='wall'){var mx=(o.x1+o.x2)/2,my=(o.y1+o.y2)/2;h.push('<text x="'+mx+'" y="'+(my-o.t-0.4)+'" font-size="'+(12*k).toFixed(2)+'" text-anchor="middle" fill="#4dff9a" font-family="JetBrains Mono, monospace" pointer-events="none">'+esc(fmt(segLen(o)))+'</text>');}}
@@ -554,6 +557,154 @@ $('#undoBtn').onclick=undo;$('#redoBtn').onclick=redo;$('#fitBtn2').onclick=func
 $('#touchDoor').addEventListener('click',function(){interact();});
 window.addEventListener('beforeunload',function(){updateDirty();});
 
+/* ---------- design check ----------
+   Rules that flag clearance problems while you edit. Every issue carries the objects it
+   refers to (refs) and a plan-space polygon (zone) that is drawn in the plan and in 3D.
+   Numbers are common residential guidelines (IRC / NKBA), in feet. */
+var CK={memo:null,list:[],focus:null};
+var IN=function(n){return n/12;};
+function vlen(x,y){return Math.hypot(x,y);}
+function itemAx(it){var a=(it.rot||0)*Math.PI/180;return {x:[Math.cos(a),Math.sin(a)],z:[-Math.sin(a),Math.cos(a)]};}
+function itemPoly(it){var A=itemAx(it),hw=it.w/2,hd=it.d/2;return [[-hw,-hd],[hw,-hd],[hw,hd],[-hw,hd]].map(function(p){return [it.cx+p[0]*A.x[0]+p[1]*A.z[0],it.cy+p[0]*A.x[1]+p[1]*A.z[1]];});}
+// Rectangle from a center point c: s in [s0,s1] along u, t in [t0,t1] along n.
+function zoneRect(c,u,n,s0,s1,t0,t1){return [[s0,t0],[s1,t0],[s1,t1],[s0,t1]].map(function(p){return [c[0]+u[0]*p[0]+n[0]*p[1],c[1]+u[1]*p[0]+n[1]*p[1]];});}
+// Wall pieces with door openings removed (a doorway is not an obstacle).
+function wallSolids(){var out=[];model.walls.forEach(function(w){var L=segLen(w);if(L<0.05)return;var ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L,n=[-uy,ux],h=w.t/2,cur=-h;
+  var cuts=wallOpenings(w).filter(function(o){return o.bot<0.05;});cuts.push({a:L+h,b:L+h});
+  cuts.forEach(function(o){if(o.a-cur>0.02)out.push({w:w,poly:zoneRect([w.x1,w.y1],[ux,uy],n,cur,o.a,-h,h)});cur=Math.max(cur,o.b);});});return out;}
+function overlapDepth(A,B){var best=Infinity,polys=[A,B];
+  for(var k=0;k<2;k++){var P=polys[k];for(var i=0;i<P.length;i++){var p=P[i],q=P[(i+1)%P.length],ax=p[1]-q[1],ay=q[0]-p[0],L=vlen(ax,ay);if(L<1e-9)continue;ax/=L;ay/=L;
+    var a0=Infinity,a1=-Infinity,b0=Infinity,b1=-Infinity,j,d;for(j=0;j<A.length;j++){d=A[j][0]*ax+A[j][1]*ay;if(d<a0)a0=d;if(d>a1)a1=d;}
+    for(j=0;j<B.length;j++){d=B[j][0]*ax+B[j][1]*ay;if(d<b0)b0=d;if(d>b1)b1=d;}var o=Math.min(a1,b1)-Math.max(a0,b0);if(o<=0)return 0;if(o<best)best=o;}}return best;}
+function ptSegDist(p,a,b){var vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-12,t=clamp(((p[0]-a[0])*vx+(p[1]-a[1])*vy)/L2,0,1);return vlen(p[0]-a[0]-vx*t,p[1]-a[1]-vy*t);}
+function polyDist(A,B){if(overlapDepth(A,B)>0)return 0;var m=Infinity,i,j;
+  for(i=0;i<A.length;i++)for(j=0;j<B.length;j++){m=Math.min(m,ptSegDist(A[i],B[j],B[(j+1)%B.length]),ptSegDist(B[j],A[i],A[(i+1)%A.length]));}return m;}
+function doorSector(d){var W=segLen(d),a0=Math.atan2(d.y2-d.y1,d.x2-d.x1),s=d.swing||1,pts=[[d.x1,d.y1]];
+  for(var k=0;k<=8;k++){var a=a0+s*Math.PI/2*k/8;pts.push([d.x1+W*Math.cos(a),d.y1+W*Math.sin(a)]);}return pts;}
+// Points spread over a door's swing, skipping the hinge corner where walls meet.
+function swingPoints(d){var W=segLen(d),a0=Math.atan2(d.y2-d.y1,d.x2-d.x1),s=d.swing||1,pts=[];
+  for(var k=1;k<=12;k++){var a=a0+s*Math.PI/2*k/12;for(var r=0.5;r<=W-0.05+1e-9;r+=Math.max(0.2,(W-0.55)/8))pts.push([d.x1+r*Math.cos(a),d.y1+r*Math.sin(a)]);}return pts;}
+function ptInConvex(p,P,inset){var sgn=0;for(var i=0;i<P.length;i++){var a=P[i],b=P[(i+1)%P.length],ex=b[0]-a[0],ey=b[1]-a[1],L=vlen(ex,ey)||1;var c=(ex*(p[1]-a[1])-ey*(p[0]-a[0]))/L;
+  if(Math.abs(c)<inset)return false;var sg=c>0?1:-1;if(!sgn)sgn=sg;else if(sg!==sgn)return false;}return true;}
+function iName(it){return it.label||it.kind||'Item';}
+function roomAt(x,y){for(var i=0;i<model.rooms.length;i++){var r=model.rooms[i];if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.d)return r;}return null;}
+function inchStr(v){return Math.round(v*12)+'"';}
+
+function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.list;
+  var out=[],walls=wallSolids(),items=model.items,polys={};items.forEach(function(it){polys[it.id]=itemPoly(it);});
+  function add(sev,rule,refs,title,detail,zone){out.push({sev:sev,rule:rule,refs:refs,title:title,detail:detail,zone:zone,key:rule+':'+refs.map(function(r){return r.id;}).join('+')});}
+  function ref(type,o){return {type:type,id:o.id};}
+  // What blocks a zone: walls (minus doorways) and items other than the ones listed. Returns the
+  // blocking objects and the smallest gap from `from` (a polygon) to any of them.
+  function blockers(zone,skip,from,minDepth){var hits=[],gap=Infinity;minDepth=minDepth==null?0.04:minDepth;
+    walls.forEach(function(s){if(skip.indexOf(s.w.id)>=0)return;if(overlapDepth(zone,s.poly)>minDepth){hits.push(ref('wall',s.w));if(from)gap=Math.min(gap,polyDist(from,s.poly));}});
+    items.forEach(function(it){if(skip.indexOf(it.id)>=0)return;if(overlapDepth(zone,polys[it.id])>minDepth){hits.push(ref('item',it));if(from)gap=Math.min(gap,polyDist(from,polys[it.id]));}});
+    return {hits:hits,gap:gap};}
+  function hitNames(hs){return hs.map(function(h){var o=getObj(h);return h.type==='wall'?'a wall':iName(o);}).filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');}
+  // Which local side of an item faces away from the closest wall (its "front"). null if none is near a wall.
+  function frontOf(it){var A=itemAx(it),c=[it.cx,it.cy],sides=[[A.x,it.w/2,it.d/2],[[-A.x[0],-A.x[1]],it.w/2,it.d/2],[A.z,it.d/2,it.w/2],[[-A.z[0],-A.z[1]],it.d/2,it.w/2]],best=null,bd=1.0;
+    sides.forEach(function(s,i){var m=[c[0]+s[0][0]*s[1],c[1]+s[0][1]*s[1]];walls.forEach(function(w){var d=polyDist([m,[m[0]+s[0][0]*0.01,m[1]+s[0][1]*0.01]],w.poly);if(d<bd){bd=d;best=i;}});});
+    if(best==null)return null;var b=sides[best],f=sides[best^1];return {dir:f[0],half:f[1],across:f[2],perp:[-f[0][1],f[0][0]]};}
+  function frontZone(it,F,depth){return zoneRect([it.cx+F.dir[0]*F.half,it.cy+F.dir[1]*F.half],F.perp,F.dir,-F.across,F.across,0.02,depth);}
+
+  // 1. Door swings: walls, furniture and other doors in the way.
+  var sectors={};model.doors.forEach(function(d){if(d.type==='barn'||segLen(d)<0.5)return;sectors[d.id]=doorSector(d);});
+  model.doors.forEach(function(d){var S=sectors[d.id];if(!S)return;var hw=hostWall(d),pts=swingPoints(d),b={hits:[]};
+    var hitBy=function(P){return pts.some(function(q){return ptInConvex(q,P,0.03);});};
+    walls.forEach(function(w){if(w.w!==hw&&hitBy(w.poly))b.hits.push(ref('wall',w.w));});items.forEach(function(it){if(hitBy(polys[it.id]))b.hits.push(ref('item',it));});
+    if(b.hits.length)add('err','swing',[ref('door',d)].concat(b.hits),doorName(d)+' can\'t open all the way','It swings into '+hitNames(b.hits)+'. Move the door, flip its swing, or make it a slider.',S);});
+  var dl=model.doors.filter(function(d){return sectors[d.id];});
+  for(var i=0;i<dl.length;i++)for(var j=i+1;j<dl.length;j++){var A=sectors[dl[i].id],B=sectors[dl[j].id];if(overlapDepth(A,B)>0.15)
+    add('warn','doors',[ref('door',dl[i]),ref('door',dl[j])],doorName(dl[i])+' and '+doorName(dl[j])+' collide','Their swings overlap, so they hit each other if both are open.',A);}
+  // Barn doors need the wall beside them clear to slide open.
+  model.doors.forEach(function(d){if(d.type!=='barn')return;var W=segLen(d);if(W<0.5)return;var u=[(d.x1-d.x2)/W,(d.y1-d.y2)/W],side=d.swing||1,hw=hostWall(d),t=hw?hw.t:model.specs.intT;
+    var n=[u[1]*side,-u[0]*side];var Z=zoneRect([d.x1,d.y1],u,n,0.1,W,t/2+0.02,t/2+0.35);var b=blockers(Z,[hw?hw.id:''],null,0.03);
+    if(b.hits.length)add('warn','barn',[ref('door',d)].concat(b.hits),doorName(d)+' can\'t slide fully open','Its track runs past '+hitNames(b.hits)+'. A barn door needs a clear wall as wide as the door beside the opening.',Z);});
+  // Door widths.
+  model.doors.forEach(function(d){var W=segLen(d),ext=/front|exterior|garage|patio/i.test(d.name||'')||(hostWall(d)||{}).ext;
+    if(ext&&W<3-0.02)add('tip','dwidth',[ref('door',d)],doorName(d)+' is '+inchStr(W)+' wide','Exterior doors are usually 36" so furniture and appliances fit through.',zoneRect([d.x1,d.y1],[(d.x2-d.x1)/W,(d.y2-d.y1)/W],[-(d.y2-d.y1)/W,(d.x2-d.x1)/W],0,W,-0.6,0.6));
+    else if(!ext&&d.type!=='barn'&&W<2.5-0.02)add('tip','dwidth',[ref('door',d)],doorName(d)+' is '+inchStr(W)+' wide','30" is a practical minimum for interior doors; 32"–36" if you want wheelchair or appliance access.',zoneRect([d.x1,d.y1],[(d.x2-d.x1)/W,(d.y2-d.y1)/W],[-(d.y2-d.y1)/W,(d.x2-d.x1)/W],0,W,-0.6,0.6));});
+
+  // 2. Fixture and appliance clearances.
+  items.forEach(function(it){var A=itemAx(it),c=[it.cx,it.cy],P=polys[it.id],R=ref('item',it),nm=iName(it),F,Z,b;
+    if(it.kind==='toilet'){var fx=A.x,fz=A.z,back=-it.w/2,front=it.w/2;
+      Z=zoneRect(c,fx,fz,back+0.05,front,-IN(15),IN(15));b=blockers(Z,[it.id],null,0.02);
+      if(b.hits.length)add('err','wc-side',[R].concat(b.hits),nm+' is too tight side to side','Code needs 15" from the toilet\'s centerline to '+hitNames(b.hits)+' (30" wide space in all).',Z);
+      Z=zoneRect(c,fx,fz,front+0.02,front+IN(21),-it.d/2,it.d/2);b=blockers(Z,[it.id],null,0.02);
+      if(b.hits.length)add('err','wc-front',[R].concat(b.hits),nm+' has less than 21" in front','Code needs 21" clear in front of a toilet; '+hitNames(b.hits)+' is in the way.',Z);
+      else{Z=zoneRect(c,fx,fz,front+0.02,front+IN(30),-it.d/2,it.d/2);b=blockers(Z,[it.id],null,0.02);
+        if(b.hits.length)add('tip','wc-front',[R].concat(b.hits),nm+' has under 30" in front','It meets code, but 30" feels much less cramped.',Z);}}
+    else if(it.kind==='bed'){var hx=A.x,sz=A.z,foot=-it.w/2,head=it.w/2;
+      [[1,'left'],[-1,'right']].forEach(function(sd){var n=[sz[0]*sd[0],sz[1]*sd[0]];var edge=zoneRect(c,hx,n,foot,head-1.8,it.d/2,it.d/2+0.3);
+        if(blockers(edge,[it.id],null,0.02).hits.some(function(h){return h.type==='wall';}))return; // pushed against a wall on purpose
+        Z=zoneRect(c,hx,n,foot,head-1.8,it.d/2+0.02,it.d/2+2);b=blockers(Z,[it.id],P,0.02);
+        if(b.hits.length)add('warn','bed',[R].concat(b.hits),nm+': '+inchStr(b.gap)+' to walk along the '+sd[1]+' side','24" is the usual minimum to get in and out of bed and make it; '+hitNames(b.hits)+' is closer than that.',Z);});
+      Z=zoneRect(c,hx,sz,foot-2,foot-0.02,-it.d/2,it.d/2);b=blockers(Z,[it.id],P,0.02);
+      if(b.hits.length)add('warn','bed',[R].concat(b.hits),nm+': '+inchStr(b.gap)+' at the foot','24"–36" at the foot of a bed keeps a walkway; '+hitNames(b.hits)+' is closer.',Z);}
+    else if(it.kind==='fridge'||it.kind==='range'||it.kind==='vanity'){F=frontOf(it);if(!F)return;
+      var need=it.kind==='vanity'?IN(30):IN(36),why=it.kind==='fridge'?'to open the doors and stand while they are open':it.kind==='range'?'to open the oven door and stand at it':'to stand at the sink and open the cabinet doors';
+      Z=frontZone(it,F,need);b=blockers(Z,[it.id].concat(it.kind==='range'?[]:[]),P,0.03);
+      b.hits=b.hits.filter(function(h){var o=getObj(h);return !(h.type==='item'&&o&&(o.kind==='counter'||o.kind==='cabinet'||o.kind==='sink')&&polyDist(P,polys[o.id])<0.1);}); // ignore the counter run it sits in
+      if(b.hits.length)add('warn','front',[R].concat(b.hits),nm+' has '+inchStr(b.gap)+' in front',inchStr(need)+' clear is recommended '+why+'; '+hitNames(b.hits)+' is in the way.',Z);}
+    else if(it.kind==='shower'){var fz2=A.z;Z=zoneRect(c,A.x,fz2,-it.w/2,it.w/2,it.d/2+0.02,it.d/2+2);b=blockers(Z,[it.id],P,0.03);
+      if(b.hits.length)add('warn','front',[R].concat(b.hits),nm+' has '+inchStr(b.gap)+' in front of the glass','Code needs 24" clear in front of a shower opening.',Z);}});
+  // 3. Kitchen work aisles (NKBA: 42" for one cook, 48" for two).
+  items.forEach(function(isl){if(isl.kind!=='island')return;items.forEach(function(o){if(o===isl||['counter','range','sink','cabinet'].indexOf(o.kind)<0)return; // fridge has its own front check
+    var g=polyDist(polys[isl.id],polys[o.id]);if(g<=0.02||g>=IN(42))return;
+    var a=polys[isl.id],cI=[isl.cx,isl.cy],cO=[o.cx,o.cy],Z; // draw the gap as a band between the two
+    var dx=cO[0]-cI[0],dy=cO[1]-cI[1],L=vlen(dx,dy)||1,u=[dx/L,dy/L],n=[-u[1],u[0]];var half=Math.min(Math.max(isl.w,isl.d),Math.max(o.w,o.d))/2;
+    var ext=function(P){var m=-Infinity;P.forEach(function(p){m=Math.max(m,(p[0]-cI[0])*u[0]+(p[1]-cI[1])*u[1]);});return m;};var s0=ext(a),s1=s0+g;
+    Z=zoneRect(cI,n,u,-half,half,s0,s1);
+    add(g<IN(36)?'warn':'tip','aisle',[ref('item',isl),ref('item',o)],'Aisle between '+iName(isl)+' and '+iName(o)+' is '+inchStr(g),'42" is recommended for one cook, 48" for two. Under 36" is hard to pass someone or open a dishwasher.',Z);});});
+  // 4. Things running into each other or into walls.
+  var RUN=['counter','island','cabinet','vanity'],INSET=['sink','range','counter','cabinet'];
+  function nests(I,J){return (RUN.indexOf(I.kind)>=0&&INSET.indexOf(J.kind)>=0)||(RUN.indexOf(J.kind)>=0&&INSET.indexOf(I.kind)>=0);}
+  for(var a1=0;a1<items.length;a1++)for(var b1=a1+1;b1<items.length;b1++){var I=items[a1],J=items[b1];if(nests(I,J))continue;if(overlapDepth(polys[I.id],polys[J.id])>0.08)
+    add('warn','overlap',[ref('item',I),ref('item',J)],iName(I)+' overlaps '+iName(J),'They take up the same floor space. Move one or resize it.',polys[I.id]);}
+  items.forEach(function(it){var hit=null;walls.forEach(function(s){if(!hit&&overlapDepth(polys[it.id],s.poly)>0.1)hit=s.w;});
+    if(hit)add('warn','inwall',[ref('item',it),ref('wall',hit)],iName(it)+' runs into a wall','Part of it sits inside the wall. Pull it out so it sits against the wall face.',polys[it.id]);});
+  // 5. Windows blocked by tall furniture.
+  model.windows.forEach(function(wi){var W=segLen(wi);if(W<0.3)return;var u=[(wi.x2-wi.x1)/W,(wi.y2-wi.y1)/W],n=[-u[1],u[0]],hw=hostWall(wi),t=hw?hw.t:0.5;
+    var Z=zoneRect([wi.x1,wi.y1],u,n,0,W,-(t/2+0.7),t/2+0.7);
+    items.forEach(function(it){if((it.h||0)<=wi.sill+0.2)return;if(overlapDepth(Z,polys[it.id])>0.02)add('tip','window',[ref('window',wi),ref('item',it)],iName(it)+' blocks '+(wi.name||'a window'),'It is taller than the '+inchStr(wi.sill)+' sill and sits right in front of the window.',Z);});});
+  // 6. Room sizes.
+  model.rooms.forEach(function(r){var Z=[[r.x,r.y],[r.x+r.w,r.y],[r.x+r.w,r.y+r.d],[r.x,r.y+r.d]],mn=Math.min(r.w,r.d);
+    if(/hall/i.test(r.name)&&mn<IN(36))add('warn','room',[ref('room',r)],r.name+' is only '+inchStr(mn)+' wide','Code needs hallways at least 36" wide; 42" feels comfortable.',Z);
+    if(/bed/i.test(r.name)&&(r.w*r.d<70||mn<7))add('warn','room',[ref('room',r)],r.name+' is under the minimum bedroom size','Code needs at least 70 sq ft and 7\' in each direction for a bedroom.',Z);});
+  items.forEach(function(it){if(!roomAt(it.cx,it.cy))add('tip','outside',[ref('item',it)],iName(it)+' is outside every room','It may be left over from an edit, or a room is missing around it.',polys[it.id]);});
+
+  var ign={};(model.checkIgnore||[]).forEach(function(k){ign[k]=1;});out.forEach(function(o){o.ignored=!!ign[o.key];});
+  var rank={err:0,warn:1,tip:2};out.sort(function(p,q){return (p.ignored-q.ignored)||(rank[p.sev]-rank[q.sev]);});
+  CK.memo=key;CK.list=out;return out;}
+
+var SEV={err:{c:'#ff5c7a',label:'Problem'},warn:{c:'#ffb86b',label:'Check'},tip:{c:'#2de2e6',label:'Tip'}};
+function issueZones(){if(!view.issues)return [];return runChecks().filter(function(o){return !o.ignored&&o.zone;});}
+function planIssueSVG(k){var h=[];issueZones().forEach(function(o){var f=CK.focus===o.key,c=SEV[o.sev].c;
+  h.push('<polygon points="'+o.zone.map(function(p){return r3(p[0])+','+r3(p[1]);}).join(' ')+'" fill="'+c+'" fill-opacity="'+(f?0.42:0.18)+'" stroke="'+c+'" stroke-width="'+(k*(f?2.5:1.2)).toFixed(3)+'" stroke-dasharray="'+(f?'':(k*4).toFixed(3)+' '+(k*3).toFixed(3))+'" pointer-events="none"/>');});return h.join('');}
+var issueG=null;
+function buildIssues3D(){if(issueG){scene.remove(issueG);issueG.traverse(function(m){if(m.geometry)m.geometry.dispose();if(m.material)m.material.dispose();});}issueG=new THREE.Group();scene.add(issueG);
+  issueZones().forEach(function(o,i){var m=new THREE.MeshBasicMaterial({color:new THREE.Color(SEV[o.sev].c).convertSRGBToLinear(),transparent:true,opacity:CK.focus===o.key?0.7:0.5,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
+    var sh=new THREE.Shape(o.zone.map(function(p){return new THREE.Vector2(p[0],p[1]);}));var mesh=new THREE.Mesh(new THREE.ShapeGeometry(sh),m);mesh.rotation.x=Math.PI/2;mesh.position.y=0.03+i*0.0005;mesh.renderOrder=2;issueG.add(mesh);
+    var lg=new THREE.BufferGeometry().setFromPoints(o.zone.map(function(p){return new THREE.Vector3(p[0],0.06,p[1]);}));var ln=new THREE.LineLoop(lg,new THREE.LineBasicMaterial({color:new THREE.Color(SEV[o.sev].c).convertSRGBToLinear(),toneMapped:false}));ln.renderOrder=3;issueG.add(ln);});}
+function renderChecks(){var L=runChecks(),open=L.filter(function(o){return !o.ignored;}),n={err:0,warn:0,tip:0};open.forEach(function(o){n[o.sev]++;});
+  var cnt=$('#ckCount');cnt.textContent=n.err+n.warn?String(n.err+n.warn):'';cnt.className='ck-count'+(n.err?' err':n.warn?' warn':'');
+  var box=$('#checkList');if(!box)return;
+  var sum='<div class="ck-sum">'+['err','warn','tip'].map(function(s){return '<span class="ck-pill" style="--c:'+SEV[s].c+'">'+n[s]+' '+SEV[s].label.toLowerCase()+(n[s]===1||s==='tip'?'':'s')+'</span>';}).join('')+'</div>';
+  var row=function(o){return '<li class="ck-item'+(CK.focus===o.key?' on':'')+(o.ignored?' ign':'')+'" data-ck="'+esc(o.key)+'" tabindex="0" style="--c:'+SEV[o.sev].c+'"><div class="ck-t"><span class="ck-dot"></span>'+esc(o.title)+'</div><div class="ck-d">'+esc(o.detail)+'</div>'+
+    '<button class="ck-x" data-ign="'+esc(o.key)+'">'+(o.ignored?'Restore':'Ignore')+'</button></li>';};
+  var ignored=L.filter(function(o){return o.ignored;});
+  box.innerHTML=sum+(open.length?'<ul class="ck-list">'+open.map(row).join('')+'</ul>':'<p class="muted">No problems found. The checks rerun every time you change the plan.</p>')+
+    (ignored.length?'<details class="ck-ign"><summary>'+ignored.length+' ignored</summary><ul class="ck-list">'+ignored.map(row).join('')+'</ul></details>':'');
+  $$('[data-ck]',box).forEach(function(li){var go=function(){focusIssue(li.dataset.ck);};li.onclick=function(e){if(e.target.closest('[data-ign]'))return;go();};li.onkeydown=function(e){if(e.key==='Enter')go();};});
+  $$('[data-ign]',box).forEach(function(b){b.onclick=function(){var k=b.dataset.ign,arr=(model.checkIgnore||[]).slice(),i=arr.indexOf(k);pushUndo();if(i>=0)arr.splice(i,1);else arr.push(k);model.checkIgnore=arr;if(CK.focus===k)CK.focus=null;afterChange();};});}
+function focusIssue(key){var o=runChecks().filter(function(x){return x.key===key;})[0];if(!o)return;CK.focus=key;setEditing(true);
+  var r=o.refs[0];sel=getObj(r)?r:null;
+  if(o.zone){var xs=o.zone.map(function(p){return p[0];}),ys=o.zone.map(function(p){return p[1];}),cx=(Math.min.apply(0,xs)+Math.max.apply(0,xs))/2,cy=(Math.min.apply(0,ys)+Math.max.apply(0,ys))/2;
+    var zw=Math.max.apply(0,xs)-Math.min.apply(0,xs),zh=Math.max.apply(0,ys)-Math.min.apply(0,ys);
+    setTimeout(function(){var rc=svg.getBoundingClientRect(),asp=(rc.width||400)/(rc.height||400),w=Math.max(14,zw*2.6,zh*2.6*asp),h=w/asp;pvb={x:cx-w/2,y:cy-h/2,w:w,h:h};setVB();renderPlan();},80);}
+  renderPlan();renderInspector();renderChecks();showTab('check');}
+$('#tIssues').onchange=function(e){view.issues=e.target.checked;saveView();renderPlan();buildIssues3D();};
+
 /* ---------- loop ---------- */
 function resize(){var w=host.clientWidth||1,h=host.clientHeight||1;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 if(window.ResizeObserver){new ResizeObserver(function(){resize();if(document.body.classList.contains('editing'))renderPlan();}).observe(host);}else window.addEventListener('resize',resize);
@@ -562,7 +713,7 @@ function frame(now){var dt=Math.min(0.05,(now-last)/1000);last=now;
   if(rebuildQueued){rebuildQueued=false;rebuild();}
   if(view.mode==='walk')updateWalk(dt);else{stepTween(now);setOrbitCam();}
   updateDoors(dt);updateLabels();renderer.render(scene,camera);requestAnimationFrame(frame);}
-syncViewUI();renderSpecs();renderInspector();rebuild();resize();
+syncViewUI();renderSpecs();renderInspector();renderChecks();rebuild();resize();
 (function(){var bb=bounds();orbit.tx=bb.cx;orbit.tz=bb.cy;})();goView('ne');tween.dur=1;
 updateDirty();
 if(JSON.stringify(model)!==savedJSON)setTimeout(function(){toast('Your unsaved edits from last time were restored');},600);
