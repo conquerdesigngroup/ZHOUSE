@@ -411,7 +411,8 @@
    "d": 14,
    "ceil": null,
    "floor": "#9b7653",
-   "note": ""
+   "note": "",
+   "floorMat": "wood"
   },
   {
    "id": "r2",
@@ -422,7 +423,8 @@
    "d": 21,
    "ceil": null,
    "floor": "#9b7653",
-   "note": ""
+   "note": "",
+   "floorMat": "wood"
   },
   {
    "id": "r3",
@@ -433,7 +435,8 @@
    "d": 7,
    "ceil": null,
    "floor": "#c9ccd1",
-   "note": ""
+   "note": "",
+   "floorMat": "hex"
   },
   {
    "id": "r4",
@@ -444,7 +447,8 @@
    "d": 7,
    "ceil": null,
    "floor": "#c9ccd1",
-   "note": ""
+   "note": "",
+   "floorMat": "tile24"
   },
   {
    "id": "r5",
@@ -455,7 +459,8 @@
    "d": 4,
    "ceil": null,
    "floor": "#b9b2a6",
-   "note": ""
+   "note": "",
+   "floorMat": "lvp"
   },
   {
    "id": "r6",
@@ -466,7 +471,8 @@
    "d": 18,
    "ceil": null,
    "floor": "#a57f5a",
-   "note": ""
+   "note": "",
+   "floorMat": "wood"
   },
   {
    "id": "r7",
@@ -477,7 +483,8 @@
    "d": 4,
    "ceil": null,
    "floor": "#9b7653",
-   "note": ""
+   "note": "",
+   "floorMat": "wood"
   },
   {
    "id": "r8",
@@ -488,7 +495,8 @@
    "d": 12,
    "ceil": null,
    "floor": "#8f7356",
-   "note": ""
+   "note": "",
+   "floorMat": "lvp"
   },
   {
    "id": "r9",
@@ -499,7 +507,8 @@
    "d": 8,
    "ceil": null,
    "floor": "#6f6c6a",
-   "note": ""
+   "note": "",
+   "floorMat": "tile24"
   },
   {
    "id": "r10",
@@ -510,7 +519,8 @@
    "d": 8,
    "ceil": null,
    "floor": "#8a8a8a",
-   "note": ""
+   "note": "",
+   "floorMat": "concrete"
   }
  ],
  "items": [
@@ -577,7 +587,8 @@
    "h": 2.8,
    "rot": 0,
    "color": "#5a4636",
-   "note": ""
+   "note": "",
+   "top": "marble"
   },
   {
    "id": "i6",
@@ -590,7 +601,8 @@
    "h": 3,
    "rot": 0,
    "color": "#e6e1d8",
-   "note": ""
+   "note": "",
+   "top": "quartz"
   },
   {
    "id": "i7",
@@ -616,7 +628,8 @@
    "h": 3,
    "rot": 0,
    "color": "#e6e1d8",
-   "note": ""
+   "note": "",
+   "top": "quartz"
   },
   {
    "id": "i9",
@@ -655,7 +668,8 @@
    "h": 3,
    "rot": 0,
    "color": "#3a4a5a",
-   "note": ""
+   "note": "",
+   "top": "quartz"
   },
   {
    "id": "i12",
