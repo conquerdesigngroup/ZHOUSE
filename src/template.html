@@ -39,11 +39,15 @@
 <section class="pane" data-pane="edit">
 <div class="group"><div class="g-title">Add</div>
 <div class="grid2"><button class="btn" data-add="wall">+ Wall</button><button class="btn" data-add="door">+ Door</button><button class="btn" data-add="window">+ Window</button><button class="btn" data-add="room">+ Room</button></div>
-<div class="row"><select id="itemKind" aria-label="Item type"></select><button class="btn" data-add="item" style="flex:1">+ Item</button></div>
 <div class="row"><span class="lbl">Snap to</span><select id="snapSel" aria-label="Snap increment"><option value="0.0833333">1"</option><option value="0.25" selected>3"</option><option value="0.5">6"</option><option value="1">1'</option><option value="0">Off</option></select></div>
 <div class="row2"><button class="btn" id="undoBtn">Undo</button><button class="btn" id="redoBtn">Redo</button></div>
 <p class="hint">Drag things in the plan to move them, and drag the round handles to resize. Doors and windows snap to the nearest wall. You can type lengths as <b>9.5</b>, <b>9'6"</b> or <b>114"</b>.</p>
 </div>
+<div class="group"><div class="g-title">Furniture catalog</div>
+<input type="search" id="catSearch" class="cat-search" placeholder="Search: queen bed, washer, car…" aria-label="Search the catalog">
+<div id="catChips" class="chips"></div>
+<div id="catalog" class="cat-grid"></div>
+<p class="hint">Click to add in the middle of the plan, or drag a card onto the plan. Sizes are typical real-world sizes; change them in the selection below.</p></div>
 <div class="group"><div class="g-title" id="inspTitle">Selection</div><div id="inspector"></div></div>
 </section>
 <section class="pane" data-pane="check">
@@ -90,6 +94,7 @@
 <tr><td><kbd>V</kbd> / <kbd>B</kbd> / <kbd>M</kbd></td><td>Select / draw walls / measure (in the plan)</td></tr>
 <tr><td>While drawing</td><td>Type a length, then <kbd>Enter</kbd> · <kbd>Alt</kbd> for any angle · <kbd>Esc</kbd> to stop</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></td><td>Undo / redo</td></tr>
+<tr><td><kbd>R</kbd></td><td>Rotate the selected item 90°</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>D</kbd> · <kbd>Del</kbd></td><td>Duplicate · delete the selection</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>S</kbd></td><td>Save</td></tr>
 <tr><td><kbd>\</kbd></td><td>Toggle side panel</td></tr>

@@ -179,6 +179,13 @@ function buildItem(it){
       add(cyl(0.3,0.3,0.05,'#c9ccd1',{metalness:0.8,roughness:0.2}),0,h-0.6,-d/2+0.5);break;
     case 'shelf':add(bx(0.08,h,d,c),-w/2+0.04,h/2,0);add(bx(0.08,h,d,c),w/2-0.04,h/2,0);for(var k=0;k<6;k++)add(bx(w,0.07,d,c),0,0.2+k*(h-0.3)/5,0);break;
     case 'plant':add(cyl(0.6,0.45,1.2,'#3b3448'),0,0.6,0);var lf=new THREE.Mesh(new THREE.SphereGeometry(Math.min(w,d)/2,14,10),mat('#3f8f5a'));lf.castShadow=true;add(lf,0,1.2+Math.max(0.5,h-1.2)/2,0);lf.scale.y=Math.max(0.5,h-1.2)/Math.min(w,d);break;
+    case 'dishwasher':add(bx(w,h,d,'#2a2a30'),0,h/2,0);add(bx(w-0.08,h-0.5,0.04,c,{metalness:0.6,roughness:0.35}),0,(h-0.5)/2+0.3,d/2+0.01);add(bx(w*0.7,0.06,0.08,'#7e838b',{metalness:0.8}),0,h-0.35,d/2+0.06);break;
+    case 'washer':add(bx(w,h,d,c),0,h/2,0);var dr=add(cyl(w*0.32,w*0.32,0.06,'#4a5260',{metalness:0.5,roughness:0.3}),0,h*0.48,d/2+0.02);dr.rotation.x=Math.PI/2;add(bx(w,0.4,0.08,'#cfd3d8'),0,h-0.2,-d/2+0.2);break;
+    case 'tv':var sh2=w*0.5625;add(bx(w,sh2,0.12,'#0b0b0e',{roughness:0.25,metalness:0.3}),0,h-sh2/2,0);add(bx(w-0.12,sh2-0.12,0.01,'#1d2a44',{roughness:0.1}),0,h-sh2/2,0.065);break;
+    case 'rug':var rg=add(bx(w,Math.max(0.02,h),d,c,{roughness:1}),0,Math.max(0.02,h)/2+0.006,0);rg.castShadow=false;break;
+    case 'car':var bh=h*0.5,wr=Math.min(1.15,h*0.24);add(bx(w,bh,d*0.96,c,{metalness:0.5,roughness:0.35}),0,wr*0.7+bh/2,0);
+      add(bx(w*0.52,h-bh-wr*0.7,d*0.84,c,{metalness:0.5,roughness:0.35}),-w*0.04,wr*0.7+bh+(h-bh-wr*0.7)/2,0);add(bx(w*0.5+0.02,(h-bh-wr*0.7)*0.7,d*0.86,'#1d2a44',{roughness:0.1,metalness:0.3}),-w*0.04,wr*0.7+bh+(h-bh-wr*0.7)*0.45,0);
+      [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(q){var t=add(cyl(wr,wr,0.7,'#141416',{roughness:0.9}),q[0]*w*0.32,wr,q[1]*(d/2-0.3));t.rotation.x=Math.PI/2;});break;
     default:add(bx(w,h,d,c),0,h/2,0);
   }
   g.position.set(it.cx,0,it.cy);g.rotation.y=-(it.rot||0)*Math.PI/180;house.add(g);tagSel(g,{type:'item',id:it.id});
@@ -318,6 +325,7 @@ document.addEventListener('keydown',function(e){
     case 'KeyL':view.labels=!view.labels;saveView();syncViewUI();break;
     case 'KeyP':setEditing(!document.body.classList.contains('editing'));break;
     case 'KeyK':showTab('check');break;
+    case 'KeyR':if(sel&&sel.type==='item'){var ro=getObj();if(ro){pushUndo();ro.rot=((ro.rot||0)+90)%360;afterChange();}}break;
     case 'KeyV':setTool('select');break;case 'KeyB':setTool('wall');break;case 'KeyM':setTool('measure');break;
     case 'KeyH':$('#help').hidden=!$('#help').hidden;break;
     case 'BracketLeft':setCeiling(model.specs.ceiling-0.25);break;case 'BracketRight':setCeiling(model.specs.ceiling+0.25);break;
@@ -386,8 +394,8 @@ function snapOpening(o){var mx=(o.x1+o.x2)/2,my=(o.y1+o.y2)/2,W=segLen(o)||3,bes
   o.x1=r3(w.x1+best.ux*(s-ou*W/2));o.y1=r3(w.y1+best.uy*(s-ou*W/2));o.x2=r3(w.x1+best.ux*(s+ou*W/2));o.y2=r3(w.y1+best.uy*(s+ou*W/2));return true;}
 var ITEM_KINDS=[['cabinet','Cabinet / box',3,2,3,'#e6e1d8'],['counter','Base counter',6,2.1,3,'#e6e1d8'],['island','Island',4,7,3,'#3a4a5a'],['range','Range',2.5,2.1,3.05,'#2d2e33'],['fridge','Refrigerator',3,2.6,6,'#b9bec6'],['sink','Sink',2,1.6,3,'#9aa3ad'],
   ['vanity','Vanity',5,1.9,2.8,'#5a4636'],['toilet','Toilet',2.4,1.6,2.5,'#f4f4f4'],['tub','Tub',5,2.5,1.8,'#f4f4f4'],['shower','Shower',4,3.5,7,'#e8e8ea'],['bed','Bed',6.8,6,2,'#4a3f36'],['sofa','Sofa',3,7.5,2.8,'#5c5f78'],
-  ['chair','Chair',2.8,2.8,2.8,'#7a6a8e'],['table','Table',6,3.5,2.5,'#6b5544'],['shelf','Shelving',4,1.3,7,'#c8b89c'],['plant','Plant',1.8,1.8,4,'#3f8f5a']];
-$('#itemKind').innerHTML=ITEM_KINDS.map(function(k){return '<option value="'+k[0]+'">'+k[1]+'</option>';}).join('');
+  ['chair','Chair',2.8,2.8,2.8,'#7a6a8e'],['table','Table',6,3.5,2.5,'#6b5544'],['shelf','Shelving',4,1.3,7,'#c8b89c'],['plant','Plant',1.8,1.8,4,'#3f8f5a'],
+  ['dishwasher','Dishwasher',2,2.08,2.83,'#b9bec6'],['washer','Washer / dryer',2.25,2.5,3.17,'#eceef0'],['tv','TV',4.75,0.75,5,'#111114'],['rug','Rug',10,8,0.04,'#6f5a7d'],['car','Vehicle',16,6.17,4.75,'#3d5a80']];
 function viewCenter(){if(document.body.classList.contains('editing'))return {x:r3(pvb.x+pvb.w/2),y:r3(pvb.y+pvb.h/2)};var b=bounds();return {x:b.cx,y:b.cy};}
 function snapV(v){var s=view.snap;return s?Math.round(v/s)*s:v;}
 $$('[data-add]').forEach(function(b){b.onclick=function(){addThing(b.dataset.add);};});
@@ -398,7 +406,7 @@ function addThing(kind){pushUndo();var c=viewCenter(),S=model.specs,o;c.x=snapV(
     if(w){var L=segLen(w),ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L;o.x1=r3(mx-ux*W/2);o.y1=r3(my-uy*W/2);o.x2=r3(mx+ux*W/2);o.y2=r3(my+uy*W/2);}else snapOpening(o);
     model[kind==='door'?'doors':'windows'].push(o);}
   else if(kind==='room'){o={id:uid('r'),name:'New room',x:c.x-5,y:c.y-5,w:10,d:10,ceil:null,floor:'#8f7356',note:''};model.rooms.push(o);}
-  else{var k=ITEM_KINDS.filter(function(x){return x[0]===$('#itemKind').value;})[0]||ITEM_KINDS[0];o={id:uid('i'),label:k[1],kind:k[0],cx:c.x,cy:c.y,w:k[2],d:k[3],h:k[4],rot:0,color:k[5],note:''};model.items.push(o);kind='item';}
+  else{var k=ITEM_KINDS.filter(function(x){return x[0]==='cabinet';})[0]||ITEM_KINDS[0];o={id:uid('i'),label:k[1],kind:k[0],cx:c.x,cy:c.y,w:k[2],d:k[3],h:k[4],rot:0,color:k[5],note:''};model.items.push(o);kind='item';}
   sel={type:kind,id:o.id};setEditing(true);showTab('edit');afterChange();toast(kind==='door'||kind==='window'?(sel&&getObj()&&hostWall(getObj())?'Added. Drag it along the wall to place it.':'Added. Drag it onto a wall.'):'Added in the middle of the plan');}
 
 /* ---------- inspector ---------- */
@@ -590,6 +598,44 @@ function planToolSVG(k){var h=[],sw=function(px){return (px*k).toFixed(3);},fs=(
   if(hover)h.push('<circle cx="'+r3(hover.x)+'" cy="'+r3(hover.y)+'" r="'+sw(hover.snap==='end'?7:hover.snap==='wall'?6:4)+'" fill="none" stroke="'+col+'" stroke-width="'+sw(2)+'" pointer-events="none"/>');
   return h.join('');}
 $('#tDims').onchange=function(e){view.dims=e.target.checked;saveView();renderPlan();};
+/* ---------- furniture catalog ----------
+   Real-world sizes in feet. w runs along the item's local X, d along local Z (see buildItem for
+   which side is the front/back for each kind: beds have the headboard at +X, sofas the back at -X). */
+var CATALOG=[
+ ['Bedroom',[['King bed','bed',6.92,6.5,2,'#4a3f36'],['Cal King bed','bed',7.17,6,2,'#4a3f36'],['Queen bed','bed',6.92,5.17,2,'#4a3f36'],['Full bed','bed',6.42,4.67,2,'#4a3f36'],['Twin bed','bed',6.42,3.42,2,'#4a3f36'],
+   ['Nightstand','cabinet',2,1.5,2.17,'#5a4636'],['Dresser 60"','cabinet',5,1.67,2.75,'#5a4636'],['Tall dresser','cabinet',3,1.67,4.33,'#5a4636'],['Accent chair','chair',2.5,2.5,2.8,'#7a6a8e']]],
+ ['Living',[['Sofa 84"','sofa',3.08,7,2.8,'#5c5f78'],['Sofa 96"','sofa',3.17,8,2.8,'#5c5f78'],['Loveseat','sofa',3,5.33,2.8,'#5c5f78'],['Armchair','chair',2.83,2.83,2.8,'#7a6a8e'],
+   ['Coffee table','table',4,2,1.5,'#6b5544'],['Side table','table',1.67,1.67,2,'#6b5544'],['TV console','cabinet',6,1.5,2,'#3a3440'],['TV 65"','tv',4.75,0.75,5,'#111114'],['TV 75"','tv',5.5,0.75,5.3,'#111114'],
+   ['Rug 8×10','rug',10,8,0.04,'#6f5a7d'],['Rug 5×8','rug',8,5,0.04,'#6f5a7d'],['Floor plant','plant',1.8,1.8,4.5,'#3f8f5a']]],
+ ['Dining',[['Table, seats 6','table',6,3.33,2.5,'#6b5544'],['Table, seats 8','table',8,3.5,2.5,'#6b5544'],['Round table 48"','table',4,4,2.5,'#6b5544'],['Dining chair','chair',1.67,1.83,3.1,'#7a6a8e'],['Buffet','cabinet',6,1.67,3,'#5a4636']]],
+ ['Kitchen',[['Base cabinet 36"','counter',3,2.08,3,'#e6e1d8'],['Base cabinet 24"','counter',2,2.08,3,'#e6e1d8'],['Sink base 36"','sink',3,2.08,3,'#9aa3ad'],['Range 30"','range',2.5,2.17,3.05,'#2d2e33'],['Range 36"','range',3,2.25,3.05,'#2d2e33'],
+   ['Refrigerator 36"','fridge',3,2.67,5.83,'#b9bec6'],['Refrigerator 30"','fridge',2.5,2.5,5.5,'#b9bec6'],['Dishwasher 24"','dishwasher',2,2.08,2.83,'#b9bec6'],['Island 4×7','island',4,7,3,'#3a4a5a'],['Island 3×6','island',3,6,3,'#3a4a5a'],
+   ['Bar stool','chair',1.42,1.42,2.5,'#7a6a8e'],['Pantry cabinet','cabinet',2.5,2,7,'#e6e1d8']]],
+ ['Bath',[['Toilet','toilet',2.33,1.67,2.5,'#f4f4f4'],['Vanity 36"','vanity',3,1.75,2.83,'#5a4636',1],['Vanity 48"','vanity',4,1.83,2.83,'#5a4636',1],['Double vanity 60"','vanity',5,1.83,2.83,'#5a4636',2],['Double vanity 72"','vanity',6,1.83,2.83,'#5a4636',2],
+   ['Tub 60×30','tub',5,2.5,1.67,'#f4f4f4'],['Shower 36×36','shower',3,3,7,'#e8e8ea'],['Shower 60×32','shower',5,2.67,7,'#e8e8ea'],['Linen cabinet','cabinet',2,1.5,7,'#e6e1d8']]],
+ ['Office',[['Desk 60"','table',5,2.5,2.5,'#6b5544'],['Desk chair','chair',2,2,3.3,'#3a3440'],['Bookshelf','shelf',3,1,6,'#c8b89c'],['File cabinet','cabinet',1.25,2.17,2.33,'#7d8590']]],
+ ['Laundry',[['Washer','washer',2.25,2.5,3.17,'#eceef0'],['Dryer','washer',2.25,2.5,3.17,'#eceef0'],['Utility sink','sink',2,1.83,2.83,'#e6e1d8'],['Folding counter','counter',5,2,3,'#e6e1d8']]],
+ ['Garage',[['Car (sedan)','car',16,6.17,4.75,'#3d5a80'],['SUV / pickup','car',19,6.75,6.25,'#5a5f69'],['Motorcycle','car',7,2.67,3.67,'#8c2f39'],['Workbench','counter',6,2.5,3,'#8a6d4b'],
+   ['Tool chest','cabinet',3.5,1.67,3.5,'#b3262e'],['Garage shelving','shelf',4,2,6,'#7d8590'],['Garage fridge','fridge',2.5,2.5,5.5,'#b9bec6'],['Lift / storage rack','shelf',8,4,6,'#7d8590']]],
+ ['Storage',[['Wire shelving','shelf',4,1.33,7,'#c8b89c'],['Cabinet','cabinet',3,2,3,'#e6e1d8'],['Wardrobe','cabinet',4,2,7,'#5a4636']]]];
+var catCat='All',catQ='';
+function catItems(){var out=[];CATALOG.forEach(function(c){c[1].forEach(function(p){out.push({cat:c[0],p:p});});});
+  var q=catQ.trim().toLowerCase();return out.filter(function(x){return (catCat==='All'||x.cat===catCat)&&(!q||(x.p[0]+' '+x.cat+' '+x.p[1]).toLowerCase().indexOf(q)>=0);});}
+function renderCatalog(){var box=$('#catalog');if(!box)return;var cats=['All'].concat(CATALOG.map(function(c){return c[0];}));
+  $('#catChips').innerHTML=cats.map(function(c){return '<button class="chip'+(c===catCat?' on':'')+'" data-cat="'+c+'">'+c+'</button>';}).join('');
+  var list=catItems();box.innerHTML=list.length?list.map(function(x,i){var p=x.p;return '<button class="cat-card" draggable="true" data-pi="'+esc(x.cat+'|'+p[0])+'" title="Click to add, or drag it into the plan"><span class="cat-sw" style="background:'+p[5]+'"></span><span class="cat-n">'+esc(p[0])+'</span><span class="cat-d">'+esc(fmt(p[2]).replace(/-0"$/,'')+' × '+fmt(p[3]).replace(/-0"$/,''))+'</span></button>';}).join(''):'<p class="muted">Nothing matches.</p>';
+  $$('[data-cat]').forEach(function(b){b.onclick=function(){catCat=b.dataset.cat;renderCatalog();};});
+  $$('.cat-card',box).forEach(function(b){b.onclick=function(){addPreset(b.dataset.pi);};
+    b.addEventListener('dragstart',function(e){e.dataTransfer.setData('text/x-house-item',b.dataset.pi);e.dataTransfer.setData('text/plain',b.dataset.pi);e.dataTransfer.effectAllowed='copy';});});}
+function findPreset(key){var parts=key.split('|'),hit=null;CATALOG.forEach(function(c){if(c[0]!==parts[0])return;c[1].forEach(function(p){if(p[0]===parts[1])hit=p;});});return hit;}
+function addPreset(key,at){var p=findPreset(key);if(!p)return;var c=at||viewCenter();pushUndo();
+  var o={id:uid('i'),label:p[0],kind:p[1],cx:snapV(c.x),cy:snapV(c.y),w:p[2],d:p[3],h:p[4],rot:0,color:p[5],note:''};if(p[6])o.sinks=p[6];
+  model.items.push(o);sel={type:'item',id:o.id};setEditing(true);afterChange();toast(p[0]+' added ('+fmt(p[2])+' × '+fmt(p[3])+'). Drag to place it, R or Rotate 90° to turn it.');}
+$('#catSearch').addEventListener('input',function(e){catQ=e.target.value;renderCatalog();});
+svg.addEventListener('dragover',function(e){if(e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types,'text/x-house-item')>=0){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
+svg.addEventListener('drop',function(e){var k=e.dataTransfer&&e.dataTransfer.getData('text/x-house-item');if(!k)return;e.preventDefault();addPreset(k,toPlan(e));});
+renderCatalog();
+
 
 
 /* ---------- side panel & UI wiring ---------- */
@@ -661,7 +707,7 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
   // blocking objects and the smallest gap from `from` (a polygon) to any of them.
   function blockers(zone,skip,from,minDepth){var hits=[],gap=Infinity;minDepth=minDepth==null?0.04:minDepth;
     walls.forEach(function(s){if(skip.indexOf(s.w.id)>=0)return;if(overlapDepth(zone,s.poly)>minDepth){hits.push(ref('wall',s.w));if(from)gap=Math.min(gap,polyDist(from,s.poly));}});
-    items.forEach(function(it){if(skip.indexOf(it.id)>=0)return;if(overlapDepth(zone,polys[it.id])>minDepth){hits.push(ref('item',it));if(from)gap=Math.min(gap,polyDist(from,polys[it.id]));}});
+    items.forEach(function(it){if(skip.indexOf(it.id)>=0||it.kind==='rug')return;if(overlapDepth(zone,polys[it.id])>minDepth){hits.push(ref('item',it));if(from)gap=Math.min(gap,polyDist(from,polys[it.id]));}});
     return {hits:hits,gap:gap};}
   function hitNames(hs){return hs.map(function(h){var o=getObj(h);return h.type==='wall'?'a wall':iName(o);}).filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');}
   // Which local side of an item faces away from the closest wall (its "front"). null if none is near a wall.
@@ -704,8 +750,8 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
         if(b.hits.length)add('warn','bed',[R].concat(b.hits),nm+': '+inchStr(b.gap)+' to walk along the '+sd[1]+' side','24" is the usual minimum to get in and out of bed and make it; '+hitNames(b.hits)+' is closer than that.',Z);});
       Z=zoneRect(c,hx,sz,foot-2,foot-0.02,-it.d/2,it.d/2);b=blockers(Z,[it.id],P,0.02);
       if(b.hits.length)add('warn','bed',[R].concat(b.hits),nm+': '+inchStr(b.gap)+' at the foot','24"–36" at the foot of a bed keeps a walkway; '+hitNames(b.hits)+' is closer.',Z);}
-    else if(it.kind==='fridge'||it.kind==='range'||it.kind==='vanity'){F=frontOf(it);if(!F)return;
-      var need=it.kind==='vanity'?IN(30):IN(36),why=it.kind==='fridge'?'to open the doors and stand while they are open':it.kind==='range'?'to open the oven door and stand at it':'to stand at the sink and open the cabinet doors';
+    else if(['fridge','range','vanity','dishwasher','washer'].indexOf(it.kind)>=0){F=frontOf(it);if(!F)return;
+      var need=it.kind==='vanity'?IN(30):IN(36),why=it.kind==='fridge'?'to open the doors and stand while they are open':it.kind==='range'?'to open the oven door and stand at it':it.kind==='dishwasher'?'to drop the door and load it':it.kind==='washer'?'to open the door and load it':'to stand at the sink and open the cabinet doors';
       Z=frontZone(it,F,need);b=blockers(Z,[it.id].concat(it.kind==='range'?[]:[]),P,0.03);
       b.hits=b.hits.filter(function(h){var o=getObj(h);return !(h.type==='item'&&o&&(o.kind==='counter'||o.kind==='cabinet'||o.kind==='sink')&&polyDist(P,polys[o.id])<0.1);}); // ignore the counter run it sits in
       if(b.hits.length)add('warn','front',[R].concat(b.hits),nm+' has '+inchStr(b.gap)+' in front',inchStr(need)+' clear is recommended '+why+'; '+hitNames(b.hits)+' is in the way.',Z);}
@@ -720,9 +766,9 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
     Z=zoneRect(cI,n,u,-half,half,s0,s1);
     add(g<IN(36)?'warn':'tip','aisle',[ref('item',isl),ref('item',o)],'Aisle between '+iName(isl)+' and '+iName(o)+' is '+inchStr(g),'42" is recommended for one cook, 48" for two. Under 36" is hard to pass someone or open a dishwasher.',Z);});});
   // 4. Things running into each other or into walls.
-  var RUN=['counter','island','cabinet','vanity'],INSET=['sink','range','counter','cabinet'];
+  var RUN=['counter','island','cabinet','vanity'],INSET=['sink','range','counter','cabinet','dishwasher'];
   function nests(I,J){return (RUN.indexOf(I.kind)>=0&&INSET.indexOf(J.kind)>=0)||(RUN.indexOf(J.kind)>=0&&INSET.indexOf(I.kind)>=0);}
-  for(var a1=0;a1<items.length;a1++)for(var b1=a1+1;b1<items.length;b1++){var I=items[a1],J=items[b1];if(nests(I,J))continue;if(overlapDepth(polys[I.id],polys[J.id])>0.08)
+  for(var a1=0;a1<items.length;a1++)for(var b1=a1+1;b1<items.length;b1++){var I=items[a1],J=items[b1];if(nests(I,J)||I.kind==='rug'||J.kind==='rug')continue;if(overlapDepth(polys[I.id],polys[J.id])>0.08)
     add('warn','overlap',[ref('item',I),ref('item',J)],iName(I)+' overlaps '+iName(J),'They take up the same floor space. Move one or resize it.',polys[I.id]);}
   items.forEach(function(it){var hit=null;walls.forEach(function(s){if(!hit&&overlapDepth(polys[it.id],s.poly)>0.1)hit=s.w;});
     if(hit)add('warn','inwall',[ref('item',it),ref('wall',hit)],iName(it)+' runs into a wall','Part of it sits inside the wall. Pull it out so it sits against the wall face.',polys[it.id]);});
