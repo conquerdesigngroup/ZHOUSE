@@ -2,9 +2,15 @@
 // Usage: npm run dev   (then open http://localhost:5173)
 import { createServer } from 'node:http';
 import { build } from './build.mjs';
+import handler from '../api/plan.js';
+
+// Local stand-in for cloud saving: plans go to .dev-plans/ and the passcode is "dev".
+process.env.PLAN_DIR ||= new URL('../.dev-plans', import.meta.url).pathname;
+process.env.SAVE_PASSCODE ||= 'dev';
 
 const port = Number(process.env.PORT) || 5173;
 createServer((req, res) => {
+  if (req.url.startsWith('/api/plan')) return handler(req, res);
   if (req.url !== '/' && !req.url.startsWith('/index.html') && !req.url.startsWith('/?')) {
     res.writeHead(404).end('Not found');
     return;

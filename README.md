@@ -36,7 +36,15 @@ Lengths can be typed as `9.5`, `9'6"` or `114"`.
 ## Saving
 
 - **Hosted on claude.ai:** Save writes your changes into the page itself, so every device sees them.
-- **Run locally or hosted elsewhere:** edits persist in that browser's local storage. Use
+- **On Vercel:** Save stores the current plan option online (Vercel Blob), so it opens the same on
+  any device. It needs two things in the Vercel project: a Blob store connected to the project
+  (Storage → Create → Blob, which adds `BLOB_READ_WRITE_TOKEN`) and an environment variable
+  `SAVE_PASSCODE`. The first save on each device asks for that passcode. Without them, options are
+  kept in the browser.
+- **Plan options:** Specs → Plan options keeps several versions (A, B, the garage…), compares them
+  side by side, and prints a one-page plan sheet (Print / PDF).
+- **Run locally:** `npm run dev` saves options to `.dev-plans/` with passcode `dev`. Otherwise
+  edits persist in that browser's local storage. Use
   **Specs → Export JSON** to keep a copy, and **Import JSON** to load one. To bake a plan into the
   build, save it as a JSON file and run `node scripts/build.mjs --plan=path/to/plan.json`.
 
