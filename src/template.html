@@ -63,6 +63,9 @@
 </aside>
 <main id="stage">
 <div id="planWrap"><svg id="plan" role="img" aria-label="Editable floor plan"></svg>
+<div class="plan-tools"><div class="seg" role="group" aria-label="Plan tool"><button data-tool="select" class="on">Select<kbd>V</kbd></button><button data-tool="wall">Draw walls<kbd>B</kbd></button><button data-tool="measure">Measure<kbd>M</kbd></button></div>
+<select id="wallType" aria-label="New wall type"><option value="int">Interior wall</option><option value="ext">Exterior wall</option></select>
+<label class="tog mini"><input type="checkbox" id="tDims" checked> Dimensions</label></div>
 <button class="btn plan-fit" id="fitPlan">Fit</button>
 <div class="plan-hint">Scroll to zoom · drag empty space to pan · Del removes</div></div>
 <div id="view3d"><div id="labels"></div>
@@ -84,6 +87,8 @@
 <tr><td><kbd>C</kbd> / <kbd>L</kbd></td><td>Ceilings / labels</td></tr>
 <tr><td><kbd>P</kbd></td><td>Plan editor</td></tr>
 <tr><td><kbd>K</kbd></td><td>Design check</td></tr>
+<tr><td><kbd>V</kbd> / <kbd>B</kbd> / <kbd>M</kbd></td><td>Select / draw walls / measure (in the plan)</td></tr>
+<tr><td>While drawing</td><td>Type a length, then <kbd>Enter</kbd> · <kbd>Alt</kbd> for any angle · <kbd>Esc</kbd> to stop</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></td><td>Undo / redo</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>D</kbd> · <kbd>Del</kbd></td><td>Duplicate · delete the selection</td></tr>
 <tr><td><kbd>Ctrl</kbd><kbd>S</kbd></td><td>Save</td></tr>
