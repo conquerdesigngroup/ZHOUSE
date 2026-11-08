@@ -16,7 +16,7 @@ export function build({ planFile = 'data/default-plan.json' } = {}) {
   const defaultPlan = JSON.stringify(JSON.parse(read('data/default-plan.json'))).replace(/</g, '\\u003c');
   const plan = JSON.stringify(JSON.parse(read(planFile))).replace(/</g, '\\u003c');
   const headJs = JSON.stringify(head).replace(/<\//g, '<\\/');
-  const src = read('src/app.js').replace('__HEAD__', () => headJs).replace('__DEFAULT__', () => defaultPlan);
+  const src = read('src/app.js').replace('/*@@TOOLS@@*/', () => read('src/tools.js')).replace('__HEAD__', () => headJs).replace('__DEFAULT__', () => defaultPlan);
   if (/<\/script/i.test(src)) throw new Error('src/app.js must not contain a literal closing script tag; write <\\/script> instead.');
   if (/<\/style/i.test(css)) throw new Error('styles.css must not contain </style>.');
   return '<!DOCTYPE html>\n<html lang="en">\n<head>\n' + head +

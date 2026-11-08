@@ -5,6 +5,7 @@
 <div class="seg" role="group" aria-label="Camera mode"><button id="mOrbit" class="on">Orbit<kbd>O</kbd></button><button id="mWalk">Walk<kbd>F</kbd></button></div>
 <div class="seg" role="group" aria-label="Camera angle"><button data-view="top">Top<kbd>1</kbd></button><button data-view="ne">NE<kbd>2</kbd></button><button data-view="nw">NW<kbd>3</kbd></button><button data-view="se">SE<kbd>4</kbd></button><button data-view="sw">SW<kbd>5</kbd></button><button data-view="front">Front<kbd>6</kbd></button><button data-view="side">Side<kbd>7</kbd></button></div>
 <button id="editToggle" class="btn">Plan editor<kbd>P</kbd></button>
+<button class="btn" data-tape title="Tape measure: click two points in 3D (T)">Tape<kbd>T</kbd></button>
 <div class="spacer"></div>
 <div class="design-wrap"><button id="designBtn" class="btn design-btn" aria-haspopup="true" aria-expanded="false" title="Saved designs: switch, save as new, rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="designName">Main plan</span><span class="caret">&#9662;</span></button>
 <div id="designPop" class="design-pop" hidden role="dialog" aria-label="Saved designs">
@@ -17,7 +18,7 @@
 <button id="helpBtn" class="icon-btn" aria-label="Keyboard shortcuts" title="Shortcuts (H)">?</button>
 </header>
 <aside id="side">
-<div class="tabs" role="tablist"><button data-tab="view" class="on">View</button><button data-tab="edit">Edit</button><button data-tab="specs">Specs</button><button data-tab="check">Check <span id="ckCount" class="ck-count"></span></button></div>
+<div class="tabs" role="tablist"><button data-tab="view" class="on">View</button><button data-tab="edit">Edit</button><button data-tab="tools">Tools</button><button data-tab="specs">Specs</button><button data-tab="check">Check <span id="ckCount" class="ck-count"></span></button></div>
 <section class="pane on" data-pane="view">
 <div class="group"><div class="g-title">Ceiling height</div>
 <div class="row"><input type="range" id="ceilRange" min="7" max="16" step="0.25" aria-label="Ceiling height"><span id="ceilVal" class="val"></span></div>
@@ -70,6 +71,20 @@
 <div id="catalog" class="cat-grid"></div>
 <p class="hint">Click to add in the middle of the plan, or drag a card onto the plan. Sizes are typical real-world sizes; change them in the selection below.</p></div>
 <div class="group"><div class="g-title" id="inspTitle">Selection</div><div id="inspector"></div></div>
+</section>
+<section class="pane" data-pane="tools">
+<details class="tg" open><summary>Measure</summary>
+<div class="row2"><button class="btn" data-tape>Tape measure</button><button class="btn" data-tapeclear disabled>Clear tapes</button></div>
+<p class="hint">Click two points in the 3D view: floor to ceiling, wall to wall, or the top of a counter. Each tape shows the straight distance plus how far across and how far up.</p>
+<button class="btn" id="personBtn" style="margin-top:10px">Add a 5'10" person for scale</button>
+</details>
+<details class="tg" open><summary>Spacing helpers</summary>
+<label class="tog"><input type="checkbox" id="tRings"> Clearance zones around the selected piece</label>
+<label class="tog"><input type="checkbox" id="tDists"> Distances to walls and furniture</label>
+<label class="tog"><input type="checkbox" id="tSnapAl"> Snap to walls and line up with furniture</label>
+<label class="tog"><input type="checkbox" id="tSwings"> Show every door swing</label>
+<p class="hint">Select a piece of furniture to see the space it needs (teal is clear, red is short) and how far it sits from everything around it. Hold <kbd>Alt</kbd> while dragging to move freely.</p>
+</details>
 </section>
 <section class="pane" data-pane="check">
 <div class="group"><div class="g-title">Design check</div>
