@@ -214,6 +214,7 @@ function realItem(g,it,c){var k=it.kind;c=(c||'#888888').toLowerCase();
     else if(k==='car')pick=realMat(null,src,{rough:src===c?0.22:0.6,metal:src===c?0.5:0,env:src===c?1:0.3});
     else if((src==='#f4f4f4'||src==='#ffffff')&&['toilet','tub','vanity','shower'].indexOf(k)>=0)pick=realMat(null,src,{rough:0.12,env:0.9});
     else if(k==='bed'){pick=src==='#f3f1ee'||src==='#ffffff'?realMat('linen',src):mine?(lum(c)<0.35?realMat('wood',src):realMat('fabric',src)):realMat('fabric',src);}
+    else if(k==='chair'&&mine&&lum(c)<0.4)pick=realMat('wood',src);
     else if(k==='sofa'||k==='chair')pick=realMat('fabric',src);
     else if(k==='table'||k==='shelf')pick=realMat('wood',src);
     else if(mine&&(k==='counter'||k==='island'||k==='vanity'||k==='dishwasher'))pick=realMat('shaker',src);
@@ -389,7 +390,10 @@ function buildItem(it){
       [-d/4,d/4].forEach(function(z){add(bx(1.1,0.35,d/2-0.45,'#ffffff'),w/2-1.0,1.95,z);});add(bx(w*0.42,0.1,d-0.15,'#5d6b7a'),-w*0.25,1.84,0);break;
     case 'sofa':add(bx(w,1.4,d,c),0,0.7,0);add(bx(0.75,h,d,c),-w/2+0.375,h/2,0);add(bx(w,2.0,0.55,c),0,1.0,-d/2+0.275);add(bx(w,2.0,0.55,c),0,1.0,d/2-0.275);
       add(bx(w-0.9,0.35,d-1.3,'#6b6f8c'),0.2,1.55,0);break;
-    case 'chair':add(bx(w,1.5,d,c),0,0.75,0);add(bx(w,h,0.5,c),0,h/2,d/2-0.25);break;
+    case 'chair':if(/dining|side|kitchen|desk/i.test(it.label||'')){var sy=1.5,lg=0.12;[[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(q){add(bx(lg,sy-0.08,lg,c),q[0]*(w/2-lg/2-0.04),(sy-0.08)/2,q[1]*(d/2-lg/2-0.04));});
+        add(bx(w,0.18,d-0.06,'#9a8f84'),0,sy+0.01,-0.02);[-1,1].forEach(function(sx){add(bx(lg,h-sy+0.08,lg,c),sx*(w/2-lg/2-0.04),sy-0.08+(h-sy+0.08)/2,d/2-lg/2-0.04);});
+        add(bx(w-0.1,0.85,0.07,c),0,h-0.5,d/2-0.1);add(bx(w-0.2,0.1,0.06,c),0,sy+0.45,d/2-0.1);}
+      else{add(bx(w,1.5,d,c),0,0.75,0);add(bx(w,h,0.5,c),0,h/2,d/2-0.25);}break;
     case 'table':add(bx(w,0.15,d,c),0,h-0.075,0);[[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(p){add(bx(0.2,h-0.15,0.2,c),p[0]*(w/2-0.2),(h-0.15)/2,p[1]*(d/2-0.2));});break;
     case 'counter':{var ch=sinkHoles(it,w,d-0.08);holedBox(g,w,h-0.12-0.33,d-0.08,0.33,function(){return mat(c);},ch);add(bx(w,0.33,d-0.33,'#2a272c',{roughness:0.8}),0,0.165,-0.125);holedBox(g,w+0.04,0.12,d,h-0.12,function(pw,pd){return topMaterial(it,'#2a2a30',pw,pd);},ch);break;}
     case 'island':{var ih=sinkHoles(it,w-0.3,d-0.3);holedBox(g,w-0.3,h-0.12-0.33,d-0.3,0.33,function(){return mat(c);},ih);add(bx(w-0.6,0.33,d-0.6,'#2a272c',{roughness:0.8}),0,0.165,0);holedBox(g,w,0.12,d,h-0.12,function(pw,pd){return topMaterial(it,'#ecebe6',pw,pd);},ih);break;}
@@ -1325,8 +1329,9 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
     add(g<IN(36)?'warn':'tip','aisle',[ref('item',isl),ref('item',o)],'Aisle between '+iName(isl)+' and '+iName(o)+' is '+inchStr(g),'42" is recommended for one cook, 48" for two. Under 36" is hard to pass someone or open a dishwasher.',Z);});});
   // 4. Things running into each other or into walls.
   var RUN=['counter','island','cabinet','vanity'],INSET=['sink','range','counter','cabinet','dishwasher'];
+  function tucks(I,J){var ch=I.kind==='chair'?I:J.kind==='chair'?J:null,o=ch===I?J:I;return !!ch&&['table','island','counter'].indexOf(o.kind)>=0;} // chairs slide under tables and counters
   function nests(I,J){return (RUN.indexOf(I.kind)>=0&&INSET.indexOf(J.kind)>=0)||(RUN.indexOf(J.kind)>=0&&INSET.indexOf(I.kind)>=0);}
-  for(var a1=0;a1<items.length;a1++)for(var b1=a1+1;b1<items.length;b1++){var I=items[a1],J=items[b1];if(nests(I,J)||I.kind==='rug'||J.kind==='rug')continue;if(overlapDepth(polys[I.id],polys[J.id])>0.08)
+  for(var a1=0;a1<items.length;a1++)for(var b1=a1+1;b1<items.length;b1++){var I=items[a1],J=items[b1];if(nests(I,J)||I.kind==='rug'||J.kind==='rug')continue;var od=overlapDepth(polys[I.id],polys[J.id]);if(tucks(I,J)&&od<=0.9)continue;if(od>0.08)
     add('warn','overlap',[ref('item',I),ref('item',J)],iName(I)+' overlaps '+iName(J),'They take up the same floor space. Move one or resize it.',polys[I.id]);}
   items.forEach(function(it){var hit=null;walls.forEach(function(s){if(!hit&&overlapDepth(polys[it.id],s.poly)>0.1)hit=s.w;});
     if(hit)add('warn','inwall',[ref('item',it),ref('wall',hit)],iName(it)+' runs into a wall','Part of it sits inside the wall. Pull it out so it sits against the wall face.',polys[it.id]);});
