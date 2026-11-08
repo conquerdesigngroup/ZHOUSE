@@ -6,6 +6,12 @@
 <div class="seg" role="group" aria-label="Camera angle"><button data-view="top">Top<kbd>1</kbd></button><button data-view="ne">NE<kbd>2</kbd></button><button data-view="nw">NW<kbd>3</kbd></button><button data-view="se">SE<kbd>4</kbd></button><button data-view="sw">SW<kbd>5</kbd></button><button data-view="front">Front<kbd>6</kbd></button><button data-view="side">Side<kbd>7</kbd></button></div>
 <button id="editToggle" class="btn">Plan editor<kbd>P</kbd></button>
 <div class="spacer"></div>
+<div class="design-wrap"><button id="designBtn" class="btn design-btn" aria-haspopup="true" aria-expanded="false" title="Saved designs: switch, save as new, rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="designName">Main plan</span><span class="caret">&#9662;</span></button>
+<div id="designPop" class="design-pop" hidden role="dialog" aria-label="Saved designs">
+<div class="dp-title">Your designs</div><div id="dpList" class="dp-list"></div>
+<div class="dp-sec"><label for="dpNewName">Save a copy as a new design</label><div class="dp-row"><input id="dpNewName" type="text" class="txt" maxlength="60" placeholder="Bigger kitchen"><button class="btn primary" id="dpNewBtn">Save as new</button></div></div>
+<div class="dp-sec"><label for="dpRename">Rename this design</label><div class="dp-row"><input id="dpRename" type="text" class="txt" maxlength="60"><button class="btn" id="dpRenameBtn">Rename</button></div></div>
+<p id="dpNote" class="hint"></p></div></div>
 <span id="saveState" class="save-state">Saved</span>
 <button id="saveBtn" class="btn primary" disabled>Save</button>
 <button id="helpBtn" class="icon-btn" aria-label="Keyboard shortcuts" title="Shortcuts (H)">?</button>
@@ -68,7 +74,7 @@
 <section class="pane" data-pane="check">
 <div class="group"><div class="g-title">Design check</div>
 <p class="hint" style="margin-top:0">Flags door swings that hit things, tight walkways, and fixture clearances while you edit. Click an item to jump to it in the plan.</p>
-<label class="tog"><input type="checkbox" id="tIssues" checked> Show problem areas in the plan and 3D</label>
+<label class="tog"><input type="checkbox" id="tIssues"> Shade all Design Check problem areas</label>
 <div id="checkList"></div></div>
 </section>
 <section class="pane" data-pane="specs">

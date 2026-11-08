@@ -267,7 +267,7 @@ var house=null,vert=null,ceilG=null,colSegs=[],doorObjs={},pickables=[];
 var doorState={};
 var view={mode:'orbit',ceilings:false,cut:1,labels:true,shadows:true,speed:6,snap:0.25,issues:true,dims:true,elec:true,time:15,lightsOn:false};
 (function(){var v=lsGet(LS_VIEW);if(v){try{Object.assign(view,JSON.parse(v));view.mode='orbit';}catch(e){}}})();
-function saveView(){lsSet(LS_VIEW,JSON.stringify({ceilings:view.ceilings,cut:view.cut,labels:view.labels,shadows:view.shadows,speed:view.speed,snap:view.snap,issues:view.issues,dims:view.dims,elec:view.elec,time:view.time,lightsOn:view.lightsOn}));}
+function saveView(){lsSet(LS_VIEW,JSON.stringify({ceilings:view.ceilings,cut:view.cut,labels:view.labels,shadows:view.shadows,speed:view.speed,snap:view.snap,zones:!!view.zones,dims:view.dims,elec:view.elec,time:view.time,lightsOn:view.lightsOn}));}
 
 function disposeTree(o){o.traverse(function(m){if(m.geometry)m.geometry.dispose();});}
 function tagSel(obj,sel){obj.traverse(function(m){if(m.isMesh){m.userData.sel=sel;pickables.push(m);}});}
@@ -473,7 +473,7 @@ function applyViewState(){var walk=view.mode==='walk';if(!house)return;
   $('#mOrbit').classList.toggle('on',!walk);$('#mWalk').classList.toggle('on',walk);}
 function syncViewUI(){if(typeof syncSiteUI==='function')syncSiteUI();var S=model.specs;$('#ceilRange').value=S.ceiling;$('#ceilVal').textContent=fmt(S.ceiling);$('#tCeil').checked=view.ceilings;$('#tLabels').checked=view.labels;$('#tShadows').checked=view.shadows;
   $('#cutRange').value=view.cut;$('#cutVal').textContent=Math.round(view.cut*100)+'%';$('#eyeRange').value=S.eye;$('#eyeVal').textContent=fmt(S.eye);$('#spdRange').value=view.speed;$('#spdVal').textContent=view.speed+' ft/s';
-  $('#snapSel').value=String(view.snap);$('#tIssues').checked=view.issues!==false;$('#tDims').checked=view.dims!==false;$('#tElec').checked=view.elec!==false;$('#timeRange').value=view.time==null?15:view.time;$('#timeVal').textContent=fmtTime(view.time==null?15:view.time);$('#tLights').checked=!!view.lightsOn;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
+  $('#snapSel').value=String(view.snap);$('#tIssues').checked=!!view.zones;$('#tDims').checked=view.dims!==false;$('#tElec').checked=view.elec!==false;$('#timeRange').value=view.time==null?15:view.time;$('#timeVal').textContent=fmtTime(view.time==null?15:view.time);$('#tLights').checked=!!view.lightsOn;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
 
 /* ---------- orbit camera ---------- */
 var orbit={tx:15,ty:0,tz:21,r:80,theta:Math.PI*0.8,phi:0.9},tween=null;
@@ -599,7 +599,7 @@ var rebuildQueued=false;
 function scheduleRebuild(){rebuildQueued=true;}
 function afterChange(){scheduleRebuild();renderPlan();renderInspector();renderSpecs();renderChecks();syncViewUI();updateDirty();}
 function updateDirty(){var cur=JSON.stringify(model),dirty=cur!==savedJSON,s=$('#saveState'),can=!!artifactApi||store.ready;
-  var nm=!artifactApi&&store.ready&&(store.slot!=='main'||store.slots.length>1)?store.name+' · ':'';
+  var nm='';
   s.textContent=nm+(dirty?(can?'Unsaved changes':'Edits kept in this browser'):(!artifactApi&&store.mode==='local'&&store.updated?'Saved in this browser':'Saved'));s.classList.toggle('dirty',dirty);
   $('#saveBtn').disabled=!dirty||!can;lsSet(LS_DRAFT,dirty?JSON.stringify({base:draftBase,model:model}):null);}
 function setCeiling(v){v=clamp(r3(v),6,30);if(v===model.specs.ceiling)return;pushUndo();model.specs.ceiling=v;afterChange();toast('Ceiling height '+fmt(v),1200);}
@@ -683,7 +683,8 @@ function initStore(){
   .then(function(d){if(d)openDoc(d,true);})
   .catch(function(){store.mode='local';})
   .then(function(){store.ready=true;renderSlots();updateDirty();});}
-function renderSlots(){var cur=store.slot,list=store.slots.slice();if(!list.some(function(s){return s.slot===cur;}))list.unshift({slot:cur,name:store.name+' (not saved yet)'});
+function renderSlots(){if($('#designName'))$('#designName').textContent=store.name;var cur=store.slot,list=store.slots.slice();if(!list.some(function(s){return s.slot===cur;}))list.unshift({slot:cur,name:store.name+' (not saved yet)'});
+  if(!list.some(function(s){return s.slot==='main';}))list.unshift({slot:'main',name:'Main plan'});
   $('#slotSel').innerHTML=list.map(function(s){return '<option value="'+esc(s.slot)+'"'+(s.slot===cur?' selected':'')+'>'+esc(s.name)+'</option>';}).join('');
   var others=store.slots.filter(function(s){return s.slot!==cur;});
   $('#slotCmpSel').innerHTML='<option value="">Pick an option…</option>'+others.map(function(s){return '<option value="'+esc(s.slot)+'">'+esc(s.name)+'</option>';}).join('');
@@ -692,6 +693,8 @@ function renderSlots(){var cur=store.slot,list=store.slots.slice();if(!list.some
     store.mode==='cloud'?'Options are saved online, so they open on any phone or computer with this link. The first save on each device asks for the site passcode.':
     'Options are saved in this browser only. Use Export JSON to move a plan to another device.';}
 function switchSlot(slug){if(slug===store.slot)return;
+  if(slug==='main'&&!store.slots.some(function(s){return s.slot==='main';})){if(JSON.stringify(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
+    resetToMain();renderSlots();goView('ne');toast('Opened "Main plan"',1600);return;}
   if(JSON.stringify(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
   backend.read(slug).then(function(d){if(!d){toast('That option couldn\'t be loaded');renderSlots();return;}openDoc(d,false);renderSlots();goView('ne');toast('Opened "'+d.name+'"',1600);})
   .catch(function(){toast('Couldn\'t reach the server');renderSlots();});}
@@ -746,7 +749,31 @@ function compareWith(slug){var out=$('#cmpOut');if(!slug){out.innerHTML='';retur
 $('#slotSel').onchange=function(e){switchSlot(e.target.value);};
 $('#slotNewBtn').onclick=function(){var n=$('#slotNew');n.hidden=!n.hidden;$('#slotCmp').hidden=true;if(!n.hidden){$('#slotName').value=store.slots.length?'Option '+String.fromCharCode(65+Math.min(25,store.slots.length)):'Option B';$('#slotName').focus();$('#slotName').select();}};
 $('#slotNewCancel').onclick=function(){$('#slotNew').hidden=true;};
-$('#slotCreate').onclick=createSlot;$('#slotName').addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Enter')createSlot();});
+$('#slotCreate').onclick=createSlot;
+/* ---------- Designs menu (top bar): the same saved options as Specs > Plan options, one click away ---------- */
+function whenStr(iso){if(!iso)return 'not saved yet';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
+function renderDesignPop(){var cur=store.slot,list=store.slots.slice();if(!list.some(function(s){return s.slot===cur;}))list.unshift({slot:cur,name:store.name,updated:null});
+  if(!list.some(function(s){return s.slot==='main';}))list.unshift({slot:'main',name:'Main plan',updated:null});
+  $('#dpList').innerHTML=list.map(function(s){return '<button class="dp-item'+(s.slot===cur?' on':'')+'" data-slot="'+esc(s.slot)+'"><span>'+esc(s.name)+'</span><small>'+(s.slot===cur?'open now':s.updated?whenStr(s.updated):'starting plan')+'</small></button>';}).join('');
+  $$('.dp-item',$('#dpList')).forEach(function(b){b.onclick=function(){if(b.dataset.slot!==store.slot){closeDesignPop();switchSlot(b.dataset.slot);}};});
+  $('#dpRename').value=store.name;
+  $('#dpNote').textContent=store.mode==='cloud'?'Designs are saved online, so they open on any device with this link.':'Designs are saved in this browser for now. Once online saving is switched on, they will open on every device.';}
+function openDesignPop(){if(!store.ready){toast('Still loading your designs. Try again in a second.');return;}renderDesignPop();var r=$('#designBtn').getBoundingClientRect(),pp=$('#designPop');if(innerWidth>820){pp.style.top=(r.bottom+8)+'px';pp.style.right=Math.max(12,innerWidth-r.right)+'px';}else{pp.style.top='';pp.style.right='';}pp.hidden=false;$('#designBtn').setAttribute('aria-expanded','true');}
+function closeDesignPop(){$('#designPop').hidden=true;$('#designBtn').setAttribute('aria-expanded','false');}
+$('#designBtn').onclick=function(e){e.stopPropagation();if($('#designPop').hidden)openDesignPop();else closeDesignPop();};
+$('#designPop').addEventListener('click',function(e){e.stopPropagation();});
+$('#designPop').addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Escape')closeDesignPop();});
+document.addEventListener('click',function(){if(!$('#designPop').hidden)closeDesignPop();});
+function saveAsNew(){var name=($('#dpNewName').value||'').trim(),slug=slugOf(name);if(!slug){toast('Give the design a name');return;}
+  if(slug===store.slot||store.slots.some(function(s){return s.slot===slug;})){toast('There\'s already a design with that name');return;}
+  var m=clone(model);normalize(m);writeSlot(slug,name,m,null).then(function(j){if(!j.ok){failMsg(j);return;}
+    openDoc({slot:slug,name:name,updated:j.updated,model:m},false);$('#dpNewName').value='';closeDesignPop();refreshSlots();toast('Saved as "'+name+'". You\'re working on it now.',2600);}).catch(function(){toast('Couldn\'t reach the server');});}
+function renameDesign(){var name=($('#dpRename').value||'').trim();if(!name){toast('Give the design a name');return;}if(name===store.name){closeDesignPop();return;}
+  var snap=JSON.stringify(model);writeSlot(store.slot,name,JSON.parse(snap),store.updated).then(function(j){if(!j.ok){failMsg(j);return;}
+    store.name=name;store.updated=j.updated;savedJSON=snap;draftBase=slotBase();lsSet(LS_DRAFT,null);closeDesignPop();refreshSlots();updateDirty();toast('Renamed and saved as "'+name+'"');}).catch(function(){toast('Couldn\'t reach the server');});}
+$('#dpNewBtn').onclick=saveAsNew;$('#dpRenameBtn').onclick=renameDesign;
+$('#dpNewName').addEventListener('keydown',function(e){if(e.key==='Enter')saveAsNew();});$('#dpRename').addEventListener('keydown',function(e){if(e.key==='Enter')renameDesign();});
+$('#slotName').addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Enter')createSlot();});
 $('#slotCmpBtn').onclick=function(){var c=$('#slotCmp');c.hidden=!c.hidden;$('#slotNew').hidden=true;if(c.hidden){$('#cmpOut').innerHTML='';$('#slotCmpSel').value='';}};
 $('#slotCmpSel').onchange=function(e){compareWith(e.target.value);};
 $('#slotDelBtn').onclick=deleteSlot;
@@ -1291,9 +1318,10 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
   items.forEach(function(isl){if(isl.kind!=='island')return;items.forEach(function(o){if(o===isl||['counter','range','sink','cabinet'].indexOf(o.kind)<0)return; // fridge has its own front check
     var g=polyDist(polys[isl.id],polys[o.id]);if(g<=0.02||g>=IN(42))return;
     var a=polys[isl.id],cI=[isl.cx,isl.cy],cO=[o.cx,o.cy],Z; // draw the gap as a band between the two
-    var dx=cO[0]-cI[0],dy=cO[1]-cI[1],L=vlen(dx,dy)||1,u=[dx/L,dy/L],n=[-u[1],u[0]];var half=Math.min(Math.max(isl.w,isl.d),Math.max(o.w,o.d))/2;
+    var dx=cO[0]-cI[0],dy=cO[1]-cI[1],AX=itemAx(isl),px=dx*AX.x[0]+dy*AX.x[1],pz=dx*AX.z[0]+dy*AX.z[1],u=Math.abs(px)>=Math.abs(pz)?(px>=0?AX.x:[-AX.x[0],-AX.x[1]]):(pz>=0?AX.z:[-AX.z[0],-AX.z[1]]),n=[-u[1],u[0]];
+    var span=function(P){var lo=Infinity,hi=-Infinity;P.forEach(function(p){var t=(p[0]-cI[0])*n[0]+(p[1]-cI[1])*n[1];lo=Math.min(lo,t);hi=Math.max(hi,t);});return [lo,hi];},sa=span(a),sb=span(polys[o.id]),lo=Math.max(sa[0],sb[0]),hi=Math.min(sa[1],sb[1]);
     var ext=function(P){var m=-Infinity;P.forEach(function(p){m=Math.max(m,(p[0]-cI[0])*u[0]+(p[1]-cI[1])*u[1]);});return m;};var s0=ext(a),s1=s0+g;
-    Z=zoneRect(cI,n,u,-half,half,s0,s1);
+    if(hi-lo<0.5){lo=sa[0];hi=sa[1];}Z=zoneRect(cI,n,u,lo,hi,s0,s1);
     add(g<IN(36)?'warn':'tip','aisle',[ref('item',isl),ref('item',o)],'Aisle between '+iName(isl)+' and '+iName(o)+' is '+inchStr(g),'42" is recommended for one cook, 48" for two. Under 36" is hard to pass someone or open a dishwasher.',Z);});});
   // 4. Things running into each other or into walls.
   var RUN=['counter','island','cabinet','vanity'],INSET=['sink','range','counter','cabinet','dishwasher'];
@@ -1349,7 +1377,8 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
 var SEV={err:{c:'#ff5c7a',label:'Problem'},warn:{c:'#ffb86b',label:'Check'},tip:{c:'#2de2e6',label:'Tip'}};
 // Whole-room and tip zones only show for the issue you clicked, so the plan doesn't drown in color.
 var WIDE_RULES=['lights','switch','hvac','smoke','room','elec-none'];
-function issueZones(){if(!view.issues)return [];return runChecks().filter(function(o){if(o.ignored||!o.zone)return false;if(CK.focus===o.key)return true;return o.sev!=='tip'&&WIDE_RULES.indexOf(o.rule)<0&&!(o.rule==='outlets'&&o.zone.length===4&&Math.abs(o.zone[1][0]-o.zone[0][0])>1.3);});}
+// Problem areas stay hidden unless the person turns them on, except the one they clicked in the Check tab.
+function issueZones(){return runChecks().filter(function(o){if(o.ignored||!o.zone)return false;if(CK.focus===o.key)return true;if(!view.zones)return false;return o.sev!=='tip'&&WIDE_RULES.indexOf(o.rule)<0&&!(o.rule==='outlets'&&o.zone.length===4&&Math.abs(o.zone[1][0]-o.zone[0][0])>1.3);});}
 function planIssueSVG(k){var h=[];issueZones().forEach(function(o){var f=CK.focus===o.key,c=SEV[o.sev].c;
   h.push('<polygon points="'+o.zone.map(function(p){return r3(p[0])+','+r3(p[1]);}).join(' ')+'" fill="'+c+'" fill-opacity="'+(f?0.42:0.18)+'" stroke="'+c+'" stroke-width="'+(k*(f?2.5:1.2)).toFixed(3)+'" stroke-dasharray="'+(f?'':(k*4).toFixed(3)+' '+(k*3).toFixed(3))+'" pointer-events="none"/>');});return h.join('');}
 var issueG=null;
@@ -1374,7 +1403,7 @@ function focusIssue(key){var o=runChecks().filter(function(x){return x.key===key
     var zw=Math.max.apply(0,xs)-Math.min.apply(0,xs),zh=Math.max.apply(0,ys)-Math.min.apply(0,ys);
     setTimeout(function(){var rc=svg.getBoundingClientRect(),asp=(rc.width||400)/(rc.height||400),w=Math.max(14,zw*2.6,zh*2.6*asp),h=w/asp;pvb={x:cx-w/2,y:cy-h/2,w:w,h:h};setVB();renderPlan();},80);}
   renderPlan();renderInspector();renderChecks();buildIssues3D();showTab('check');}
-$('#tIssues').onchange=function(e){view.issues=e.target.checked;saveView();renderPlan();buildIssues3D();};
+$('#tIssues').onchange=function(e){view.zones=e.target.checked;saveView();renderPlan();buildIssues3D();};
 
 /* ---------- loop ---------- */
 function resize(){var w=host.clientWidth||1,h=host.clientHeight||1;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
