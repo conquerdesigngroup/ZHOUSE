@@ -84,7 +84,7 @@ ground.rotation.x=-Math.PI/2;ground.position.y=-0.31;ground.receiveShadow=true;s
 var grid=new THREE.GridHelper(400,80,0x3a2c5c,0x221c33);grid.position.y=-0.29;scene.add(grid);
 
 var matCache={};
-function mat(c,o){var k=c+'|'+JSON.stringify(o||{});if(!matCache[k]){var p=Object.assign({roughness:0.85,metalness:0},o||{});p.color=new THREE.Color(c).convertSRGBToLinear();matCache[k]=new THREE.MeshStandardMaterial(p);}return matCache[k];}
+function mat(c,o){var k=c+'|'+JSON.stringify(o||{});if(!matCache[k]){var p=Object.assign({roughness:0.85,metalness:0},o||{});p.color=new THREE.Color(c).convertSRGBToLinear();matCache[k]=new THREE.MeshStandardMaterial(p);matCache[k].userData={src:String(c).toLowerCase(),o:o||{}};}return matCache[k];}
 var glassMat=new THREE.MeshStandardMaterial({color:new THREE.Color('#8fe9ff').convertSRGBToLinear(),transparent:true,opacity:0.25,roughness:0.05,metalness:0.1,depthWrite:false});
 function bx(w,h,d,c,o){var m=new THREE.Mesh(new THREE.BoxGeometry(Math.max(w,0.01),Math.max(h,0.01),Math.max(d,0.01)),typeof c==='string'?mat(c,o):c);m.castShadow=true;m.receiveShadow=true;return m;}
 /* ---------- materials: procedural textures (no image files, so the page stays one file) ----------
@@ -126,10 +126,95 @@ var ROUGH={wood:0.55,lvp:0.6,herring:0.55,tile12:0.35,tile24:0.3,hex:0.35,marble
 // A textured material sized for a surface w × h feet (one material per distinct size; cached).
 function texMat(type,base,w,h,extra){var rx=Math.round(Math.max(0.05,w/TEX_FT)*100)/100,ry=Math.round(Math.max(0.05,h/TEX_FT)*100)/100,key=type+'|'+base+'|'+rx+'|'+ry+'|'+JSON.stringify(extra||{});
   if(texMatCache[key])return texMatCache[key];var t=makeTex(type,base).clone();t.needsUpdate=true;t.repeat.set(rx,ry);
-  var m=new THREE.MeshStandardMaterial(Object.assign({map:t,roughness:ROUGH[type]==null?0.8:ROUGH[type],metalness:type==='steel'?0.7:0},extra||{}));texMatCache[key]=m;return m;}
+  var rf=ROUGH[type]==null?0.8:ROUGH[type],m=new THREE.MeshStandardMaterial(Object.assign({map:t,roughness:rf,metalness:type==='steel'?0.7:0},extra||{}));
+  if(typeof ENV!=='undefined'&&ENV&&rf<0.62){m.envMap=ENV;m.envMapIntensity=rf<0.4?0.6:0.3;}texMatCache[key]=m;return m;}
 function floorMaterial(r){var fm=r.floorMat||'solid';if(fm==='solid')return mat(r.floor||'#9b7653',{roughness:0.75});return texMat(fm,r.floor||'#9b7653',r.w,r.d);}
 var TOP_COL={quartz:'#efede8',granite:'#2b2a2e',marble:'#ecebe7',butcher:'#a8743f',concrete:'#9a9893',steel:'#c4c8cc'};
 function topMaterial(it,fallback,w,d){if(!it.top)return mat(fallback,{roughness:0.35});return texMat(it.top,TOP_COL[it.top]||'#eeeeee',w,d);}
+/* ---------- realism: surface detail (bump + grain), reflections, siding, lawn ----------
+   All textures are drawn on canvases at startup, so the page stays one self-contained file.
+   Surfaces marked with userData.world get their UVs rescaled to real feet, so a weave or a
+   siding board is the same size on a footstool and on a 20' wall. */
+var ENV=null;
+(function(){try{var es=new THREE.Scene(),cv=document.createElement('canvas');cv.width=8;cv.height=256;var g=cv.getContext('2d'),gr=g.createLinearGradient(0,0,0,256);
+  gr.addColorStop(0,'#fffaf0');gr.addColorStop(0.45,'#e6e1d8');gr.addColorStop(0.55,'#b9b2a6');gr.addColorStop(1,'#4e463d');g.fillStyle=gr;g.fillRect(0,0,8,256);
+  var side=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.BackSide}),top=new THREE.MeshBasicMaterial({color:0xfff7ea,side:THREE.BackSide}),bot=new THREE.MeshBasicMaterial({color:0x3a332c,side:THREE.BackSide});
+  es.add(new THREE.Mesh(new THREE.BoxGeometry(100,100,100),[side,side,top,bot,side,side]));
+  [[-49,8,0,Math.PI/2],[49,8,10,-Math.PI/2],[0,8,-49,0]].forEach(function(p){var w=new THREE.Mesh(new THREE.PlaneGeometry(22,16),new THREE.MeshBasicMaterial({color:0xffffff}));w.position.set(p[0],p[1],p[2]);w.rotation.y=p[3];es.add(w);});
+  var pm=new THREE.PMREMGenerator(renderer);ENV=pm.fromScene(es,0.02).texture;pm.dispose();}catch(e){ENV=null;}})();
+function cvTex(N,M,draw,color){var c=document.createElement('canvas');c.width=N;c.height=M||N;var g=c.getContext('2d');draw(g,N,M||N);var t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  if(color)t.encoding=THREE.sRGBEncoding;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t;}
+function speckle(g,N,M,n,a,sz,R){for(var i=0;i<n;i++){var v=R()<0.5?0:255;g.fillStyle='rgba('+v+','+v+','+v+','+(R()*a)+')';var s=sz*(0.4+R());g.fillRect(R()*N,R()*M,s,s);}}
+var SURF_CACHE={};
+// Each surface: a tile size in feet, a near-white detail map (multiplied by the object's color) and a bump map.
+function surf(type){if(SURF_CACHE[type])return SURF_CACHE[type];var R=rng(type.length*7919+13),S;
+  switch(type){
+    case 'plaster':S={ft:[4,4],map:cvTex(256,256,function(g,N){g.fillStyle='#fafafa';g.fillRect(0,0,N,N);speckle(g,N,N,2600,0.035,3,R);},true),
+      bump:cvTex(256,256,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);speckle(g,N,N,9000,0.25,2.2,R);}),bs:0.012,rough:0.93};break;
+    case 'fabric':S={ft:[0.6,0.6],map:cvTex(256,256,function(g,N){g.fillStyle='#f2f2f2';g.fillRect(0,0,N,N);for(var y=0;y<N;y+=4){g.fillStyle='rgba(0,0,0,'+(0.02+R()*0.03)+')';g.fillRect(0,y,N,2);}
+        for(var x=0;x<N;x+=4){g.fillStyle='rgba(255,255,255,'+(0.02+R()*0.03)+')';g.fillRect(x,0,2,N);}speckle(g,N,N,1500,0.06,2,R);},true),
+      bump:cvTex(256,256,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);for(var y=0;y<N;y+=4){for(var x=0;x<N;x+=4){var o=((x+y)/4)%2;g.fillStyle=o?'#9a9a9a':'#6a6a6a';g.fillRect(x,y,4,4);}}}),bs:0.006,rough:0.98};break;
+    case 'linen':S={ft:[0.35,0.35],map:cvTex(128,128,function(g,N){g.fillStyle='#ffffff';g.fillRect(0,0,N,N);speckle(g,N,N,900,0.05,2,R);for(var y=0;y<N;y+=3){g.fillStyle='rgba(0,0,0,0.035)';g.fillRect(0,y,N,1);}},true),
+      bump:cvTex(128,128,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);for(var y=0;y<N;y+=3){g.fillStyle='#a0a0a0';g.fillRect(0,y,N,1);}for(var x=0;x<N;x+=3){g.fillStyle='rgba(60,60,60,0.5)';g.fillRect(x,0,1,N);}}),bs:0.01,rough:0.95};break;
+    case 'wood':S={ft:[3,3],map:cvTex(512,512,function(g,N){g.fillStyle='#e9e9e9';g.fillRect(0,0,N,N);for(var k=0;k<140;k++){var y=R()*N,a=0.04+R()*0.1,amp=2+R()*6,ph=R()*6;
+        g.strokeStyle='rgba('+(R()<0.7?'40,25,10':'255,245,230')+','+a+')';g.lineWidth=0.6+R()*1.8;g.beginPath();for(var x=0;x<=N;x+=8){var yy=y+Math.sin(x/90+ph)*amp+Math.sin(x/23+ph*2)*amp*0.25;if(x)g.lineTo(x,yy);else g.moveTo(x,yy);}g.stroke();}
+        for(var q=0;q<3;q++){var kx=R()*N,ky=R()*N;var rg=g.createRadialGradient(kx,ky,1,kx,ky,10+R()*10);rg.addColorStop(0,'rgba(40,20,5,0.35)');rg.addColorStop(1,'rgba(40,20,5,0)');g.fillStyle=rg;g.fillRect(kx-25,ky-25,50,50);}},true),
+      bump:cvTex(256,256,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);for(var k=0;k<90;k++){g.fillStyle='rgba(40,40,40,'+(0.15+R()*0.2)+')';g.fillRect(0,R()*N,N,1);}}),bs:0.008,rough:0.55};break;
+    case 'brushed':S={ft:[1,1],map:cvTex(256,256,function(g,N){g.fillStyle='#f4f4f4';g.fillRect(0,0,N,N);for(var y=0;y<N;y++){g.fillStyle='rgba('+(R()<0.5?'0,0,0':'255,255,255')+','+(R()*0.06)+')';g.fillRect(0,y,N,1);}},true),
+      bump:cvTex(256,256,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);for(var y=0;y<N;y++){var v=100+Math.floor(R()*56);g.fillStyle='rgb('+v+','+v+','+v+')';g.fillRect(0,y,N,1);}}),bs:0.004,rough:0.32};break;
+    case 'shaker':// cabinet doors: 3" rails and stiles around a recessed panel, one door per 1.5' × 2.5'
+      S={ft:[1.5,2.5],map:cvTex(192,320,function(g,N,M){g.fillStyle='#f6f6f6';g.fillRect(0,0,N,M);var r=32;g.fillStyle='#eaeaea';g.fillRect(r,r,N-2*r,M-2*r);
+          g.fillStyle='rgba(0,0,0,0.28)';g.fillRect(0,0,N,3);g.fillRect(0,0,3,M);g.fillStyle='rgba(0,0,0,0.12)';g.fillRect(r,r,N-2*r,3);g.fillRect(r,r,3,M-2*r);g.fillStyle='rgba(255,255,255,0.5)';g.fillRect(r,M-r-2,N-2*r,2);g.fillRect(N-r-2,r,2,M-2*r);
+          g.fillStyle='#b9b9b9';g.fillRect(N-r+8,M*0.12,6,40);},true),
+      bump:cvTex(192,320,function(g,N,M){g.fillStyle='#c8c8c8';g.fillRect(0,0,N,M);var r=32;g.fillStyle='#7a7a7a';g.fillRect(r,r,N-2*r,M-2*r);g.fillStyle='#202020';g.fillRect(0,0,N,3);g.fillRect(0,0,3,M);g.fillStyle='#ffffff';g.fillRect(N-r+8,M*0.12,6,40);}),bs:0.03,rough:0.45};break;
+    case 'siding':// lap siding, 6" exposure: each board is thicker at the bottom and casts a thin shadow line
+      S={ft:[4,4],map:cvTex(256,256,function(g,N){var b=N/8;for(var i=0;i<8;i++){var gr=g.createLinearGradient(0,i*b,0,(i+1)*b);gr.addColorStop(0,'#e9e9e9');gr.addColorStop(0.85,'#ffffff');gr.addColorStop(1,'#9a9a9a');g.fillStyle=gr;g.fillRect(0,i*b,N,b);}speckle(g,N,N,1200,0.03,2,R);},true),
+      bump:cvTex(256,256,function(g,N){var b=N/8;for(var i=0;i<8;i++){var gr=g.createLinearGradient(0,i*b,0,(i+1)*b);gr.addColorStop(0,'#404040');gr.addColorStop(1,'#d0d0d0');g.fillStyle=gr;g.fillRect(0,i*b,N,b);}}),bs:0.06,rough:0.8};break;
+    case 'grass':S={ft:[6,6],map:cvTex(512,512,function(g,N){g.fillStyle='#4f7a3a';g.fillRect(0,0,N,N);for(var i=0;i<22000;i++){var x=R()*N,y=R()*N,l=2+R()*5;g.strokeStyle=['#3f6a2e','#5e8c45','#6f9a52','#2f5524','#7aa35a'][i%5];g.globalAlpha=0.5+R()*0.5;g.lineWidth=1;g.beginPath();g.moveTo(x,y);g.lineTo(x+(R()-0.5)*2,y-l);g.stroke();}g.globalAlpha=1;},true),
+      bump:cvTex(256,256,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);speckle(g,N,N,12000,0.4,2,R);}),bs:0.04,rough:1};break;
+    case 'foliage':S={ft:[1,1],map:cvTex(128,128,function(g,N){g.fillStyle='#ffffff';g.fillRect(0,0,N,N);for(var i=0;i<260;i++){g.fillStyle='rgba(0,'+(40+R()*80|0)+',0,'+(0.15+R()*0.3)+')';g.beginPath();g.ellipse(R()*N,R()*N,3+R()*6,1.5+R()*3,R()*3,0,7);g.fill();}},true),
+      bump:cvTex(128,128,function(g,N){g.fillStyle='#808080';g.fillRect(0,0,N,N);speckle(g,N,N,1500,0.5,4,R);}),bs:0.05,rough:0.8};break;
+    case 'door':// a two-panel shaker door, mapped once across the whole leaf (no world UVs)
+      S={ft:null,map:cvTex(128,256,function(g,N,M){g.fillStyle='#f7f7f7';g.fillRect(0,0,N,M);g.fillStyle='#ececec';g.fillRect(22,22,N-44,M*0.42);g.fillRect(22,M*0.42+44,N-44,M*0.58-66);
+          g.fillStyle='rgba(0,0,0,0.12)';g.fillRect(22,22,N-44,2);g.fillRect(22,22,2,M*0.42);g.fillRect(22,M*0.42+44,N-44,2);g.fillRect(22,M*0.42+44,2,M*0.58-66);},true),
+      bump:cvTex(128,256,function(g,N,M){g.fillStyle='#c0c0c0';g.fillRect(0,0,N,M);g.fillStyle='#707070';g.fillRect(22,22,N-44,M*0.42);g.fillRect(22,M*0.42+44,N-44,M*0.58-66);}),bs:0.03,rough:0.5};break;}
+  SURF_CACHE[type]=S;return S;}
+var REAL_CACHE={};
+// A material for a surface type in a given color. o can override roughness/metalness/env strength.
+function realMat(type,color,o){o=o||{};var key=type+'|'+color+'|'+JSON.stringify(o);if(REAL_CACHE[key])return REAL_CACHE[key];var S=type&&surf(type);
+  var p={color:new THREE.Color(color).convertSRGBToLinear(),roughness:o.rough!=null?o.rough:(S?S.rough:0.8),metalness:o.metal||0};
+  if(S){p.map=S.map;p.bumpMap=S.bump;p.bumpScale=S.bs;}if(ENV&&(o.env||0)>0){p.envMap=ENV;p.envMapIntensity=o.env;}if(o.side)p.side=o.side;
+  var m=new THREE.MeshStandardMaterial(p);m.userData.world=S&&S.ft?S.ft:null;REAL_CACHE[key]=m;return m;}
+// Rescale a box or plane's UVs so its texture tiles in real feet. uo/vo shift the pattern (feet) so
+// stacked wall pieces line up.
+function worldUV(mesh,ft,uo,vo){var gm=mesh.geometry,P=gm.parameters,uv=gm.attributes.uv;if(!P||!uv||gm.userData.wuv)return;gm.userData.wuv=1;uo=uo||0;vo=vo||0;
+  var fx=ft[0],fy=ft[1];
+  if(gm.type==='PlaneGeometry'||gm.type==='PlaneBufferGeometry'){for(var i=0;i<uv.count;i++)uv.setXY(i,(uv.getX(i)*P.width+uo)/fx,(uv.getY(i)*P.height+vo)/fy);}
+  else if(gm.type==='BoxGeometry'||gm.type==='BoxBufferGeometry'){var W=P.width,H=P.height,D=P.depth,dims=[[D,H],[D,H],[W,D],[W,D],[W,H],[W,H]];
+    for(var f=0;f<6;f++)for(var v=0;v<4;v++){var i2=f*4+v;uv.setXY(i2,(uv.getX(i2)*dims[f][0]+uo)/fx,(uv.getY(i2)*dims[f][1]+(f<2||f>3?vo:0))/fy);}}
+  else return;uv.needsUpdate=true;}
+function useReal(mesh,m,uo,vo){mesh.material=m;var ft=Array.isArray(m)?(m.filter(function(x){return x.userData.world;})[0]||{userData:{}}).userData.world:m.userData.world;if(ft)worldUV(mesh,ft,uo,vo);}
+function lum(hex){var c=new THREE.Color(hex);return 0.3*c.r+0.59*c.g+0.11*c.b;}
+// Swap an item's flat colors for real surfaces: fabric on upholstery, grain on wood, brushed steel on
+// appliances, gloss on porcelain and glass.
+function realItem(g,it,c){var k=it.kind;c=(c||'#888888').toLowerCase();
+  g.traverse(function(m){if(!m.isMesh||!m.material||!m.material.userData||m.material.userData.src==null)return;var src=m.material.userData.src,o=m.material.userData.o||{},mine=src===c,pick=null;
+    if((o.metalness||0)>=0.85&&(o.roughness||1)<=0.1)pick=realMat(null,src,{rough:0.03,metal:1,env:1.4});                      // mirror
+    else if((o.metalness||0)>=0.45)pick=realMat('brushed',src,{metal:Math.max(0.55,o.metalness),rough:0.34,env:1});            // steel
+    else if(k==='tv')pick=realMat(null,src,{rough:0.15,metal:0.2,env:0.8});
+    else if(k==='rug')pick=texMat('carpet',src,it.w,it.d);
+    else if(k==='plant')pick=src===c?realMat('foliage',src,{}):realMat(null,src,{rough:0.4,env:0.4});
+    else if(k==='car')pick=realMat(null,src,{rough:src===c?0.22:0.6,metal:src===c?0.5:0,env:src===c?1:0.3});
+    else if((src==='#f4f4f4'||src==='#ffffff')&&['toilet','tub','vanity','shower'].indexOf(k)>=0)pick=realMat(null,src,{rough:0.12,env:0.9});
+    else if(k==='bed'){pick=src==='#f3f1ee'||src==='#ffffff'?realMat('linen',src):mine?(lum(c)<0.35?realMat('wood',src):realMat('fabric',src)):realMat('fabric',src);}
+    else if(k==='sofa'||k==='chair')pick=realMat('fabric',src);
+    else if(k==='table'||k==='shelf')pick=realMat('wood',src);
+    else if(mine&&(k==='counter'||k==='island'||k==='vanity'||k==='dishwasher'))pick=realMat('shaker',src);
+    else if(mine&&k==='cabinet')pick=lum(c)<0.4?realMat('wood',src):realMat('shaker',src);
+    else if(mine&&k==='washer')pick=realMat(null,src,{rough:0.28,env:0.7});
+    else if(mine)pick=realMat('plaster',src,{rough:0.7});
+    if(pick)useReal(m,pick);});}
+function paintMat(color,o){return realMat('plaster',color,o);}
 function cyl(rt,rb,h,c,o){var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,24),typeof c==='string'?mat(c,o):c);m.castShadow=true;m.receiveShadow=true;return m;}
 
 var house=null,vert=null,ceilG=null,colSegs=[],doorObjs={},pickables=[];
@@ -146,11 +231,12 @@ function rebuild(){
   house=new THREE.Group();vert=new THREE.Group();ceilG=new THREE.Group();house.add(vert);house.add(ceilG);
   colSegs=[];doorObjs={};pickables=[];
   var S=model.specs,bb=bounds();
-  var slab=bx(bb.w+1.2,0.3,bb.d+1.2,'#2a2633');slab.position.set(bb.cx,-0.15,bb.cy);slab.castShadow=false;house.add(slab);
+  var slabM=realMat('plaster','#8f8c86',{rough:0.9});(model.rooms.length?model.rooms:[{x:bb.cx-bb.w/2,y:bb.cy-bb.d/2,w:bb.w,d:bb.d}]).forEach(function(r){var sb=bx(r.w+0.6,0.3,r.d+0.6,slabM);sb.position.set(r.x+r.w/2,-0.15-((r.x*7+r.y*3)%5)*0.0004,r.y+r.d/2);sb.castShadow=false;house.add(sb);});
+  var lawn=new THREE.Mesh(new THREE.PlaneGeometry(bb.w+600,bb.d+600),realMat('grass','#d9e0cf'));worldUV(lawn,surf('grass').ft,0,0);lawn.rotation.x=-Math.PI/2;lawn.position.set(bb.cx,-0.2,bb.cy);lawn.receiveShadow=true;house.add(lawn);
   model.rooms.forEach(function(r,i){
     var f=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(r.w,0.1),Math.max(r.d,0.1)),floorMaterial(r));
     f.rotation.x=-Math.PI/2;f.position.set(r.x+r.w/2,0.004+i*0.0015,r.y+r.d/2);f.receiveShadow=true;house.add(f);tagSel(f,{type:'room',id:r.id});
-    var c=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(r.w,0.1),Math.max(r.d,0.1)),mat('#f3f1ec',{side:THREE.DoubleSide,roughness:0.95}));
+    var c=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(r.w,0.1),Math.max(r.d,0.1)),paintMat('#f3f1ec',{side:THREE.DoubleSide,rough:0.95}));worldUV(c,surf('plaster').ft,r.x,r.y);
     c.rotation.x=Math.PI/2;c.position.set(r.x+r.w/2,roomCeil(r)-i*0.0015,r.y+r.d/2);ceilG.add(c);});
   model.walls.forEach(buildWall);
   model.windows.forEach(buildWindow);
@@ -164,10 +250,12 @@ function rebuild(){
 }
 function buildWall(w){
   var L=segLen(w);if(L<0.05)return;var ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L,rot=-Math.atan2(uy,ux),H=wallHeight(w),t=w.t||0.33;
-  var wm=mat(model.specs.wallColor||'#ece8e1',{roughness:0.92});
+  var wm=paintMat(model.specs.wallColor||'#ece8e1',{rough:0.92}),sid=w.ext&&!(w.finish&&w.finish!=='paint')?realMat('siding',w.extColor||'#e4e1da'):null;
   function piece(a,b,y0,y1,col){if(b-a<0.01||y1-y0<0.01)return;var a2=a===0?a-t/2:a,b2=b>=L-1e-6?b+t/2:b;var len=b2-a2,s=(a2+b2)/2;
-    var fin=w.finish&&w.finish!=='paint'?w.finish:null,pm=fin?texMat(fin,w.color||FINISH_COL[fin]||'#cccccc',len,y1-y0):(w.color?mat(w.color,{roughness:0.92}):wm);
-    var m=bx(len,y1-y0,t,pm);m.position.set(w.x1+ux*s,y0+(y1-y0)/2,w.y1+uy*s);m.rotation.y=rot;vert.add(m);tagSel(m,{type:'wall',id:w.id});
+    var fin=w.finish&&w.finish!=='paint'?w.finish:null,pm=fin?texMat(fin,w.color||FINISH_COL[fin]||'#cccccc',len,y1-y0):(w.color?paintMat(w.color,{rough:0.92}):wm);
+    var m=bx(len,y1-y0,t,pm);if(!fin)worldUV(m,surf('plaster').ft,a2,y0);
+    if(sid){var cx0=w.x1+ux*s,cy0=w.y1+uy*s,outP=!roomAt(cx0-uy*(t/2+0.4),cy0+ux*(t/2+0.4)),outN=!roomAt(cx0+uy*(t/2+0.4),cy0-ux*(t/2+0.4));
+      if(outP||outN){var arr=[pm,pm,pm,pm,outP?sid:pm,outN?sid:pm];m.material=arr;}}m.position.set(w.x1+ux*s,y0+(y1-y0)/2,w.y1+uy*s);m.rotation.y=rot;vert.add(m);tagSel(m,{type:'wall',id:w.id});
     if(col)colSegs.push({x1:w.x1+ux*a2,y1:w.y1+uy*a2,x2:w.x1+ux*b2,y2:w.y1+uy*b2,r:t/2});
     if(y0===0||y1===H)[1,-1].forEach(function(sd){var nx=-uy*sd,ny=ux*sd,mx=w.x1+ux*s,my=w.y1+uy*s;if(!roomAt(mx+nx*(t/2+0.4),my+ny*(t/2+0.4)))return;
       if(y0===0&&b2-a2>0.2){var bb=bx(len,0.33,0.05,TRIM,{roughness:0.5});bb.castShadow=false;bb.position.set(mx+nx*(t/2+0.025),0.165,my+ny*(t/2+0.025));bb.rotation.y=rot;vert.add(bb);}
@@ -193,7 +281,7 @@ function buildDoor(d){
   if(d.type==='overhead'){
     var sd=overheadSide(d),nx2=-uy*sd,ny2=ux*sd,off2=t/2+0.12;
     var pv=new THREE.Group();pv.position.set((d.x1+d.x2)/2+nx2*off2,H,(d.y1+d.y2)/2+ny2*off2);pv.rotation.y=base;
-    var pan=new THREE.Group();pan.position.y=-H/2;pv.add(pan);pan.add(bx(W-0.05,H,0.15,'#eceae5',{roughness:0.6}));
+    var pan=new THREE.Group();pan.position.y=-H/2;pv.add(pan);pan.add(bx(W-0.05,H,0.15,realMat('door','#eceae5',{rough:0.55})));
     for(var q=1;q<4;q++){[-0.08,0.08].forEach(function(z){var gr=bx(W-0.1,0.05,0.02,'#c9c6bf');gr.position.set(0,-H/2+H*q/4,z);pan.add(gr);});}
     vert.add(pv);doorObjs[d.id]={d:d,type:'overhead',pivot:pv,sd:sd,W:W,H:H,mx:(d.x1+d.x2)/2,my:(d.y1+d.y2)/2,ux:ux,uy:uy};tagSel(pv,{type:'door',id:d.id});
     var hd0=bx(W+0.58,0.29,t+0.1,TRIM,{roughness:0.5});hd0.position.set(d.x1+ux*W/2,H+0.145,d.y1+uy*W/2);hd0.rotation.y=base;vert.add(hd0);
@@ -201,7 +289,7 @@ function buildDoor(d){
     return;}
   if(d.type==='barn'){
     var side=d.swing||1,nx=-uy*side,ny=ux*side,off=t/2+0.1;
-    var g=new THREE.Group();g.rotation.y=base;var leaf=bx(W,H+0.15,0.13,'#5b3f2c');leaf.position.y=(H+0.15)/2;g.add(leaf);
+    var g=new THREE.Group();g.rotation.y=base;var leaf=bx(W,H+0.15,0.13,realMat('wood','#6a4a33'));worldUV(leaf,[2,3],0,0);leaf.position.y=(H+0.15)/2;g.add(leaf);
     [0.25,0.75].forEach(function(f){var s=bx(W-0.1,0.25,0.03,'#3f2b1f');s.position.set(0,(H+0.15)*f,0.08*side*0+0.08);g.add(s);var s2=s.clone();s2.position.z=-0.08;g.add(s2);});
     var mx=(d.x1+d.x2)/2+nx*off,my=(d.y1+d.y2)/2+ny*off;vert.add(g);
     var track=bx(2*W+0.3,0.12,0.12,'#1d1b22',{metalness:0.6,roughness:0.4});track.rotation.y=base;
@@ -209,7 +297,7 @@ function buildDoor(d){
     doorObjs[d.id]={d:d,type:'barn',g:g,mx:mx,my:my,ox:-ux,oy:-uy,ux:ux,uy:uy,W:W};tagSel(g,{type:'door',id:d.id});
   }else{
     var pivot=new THREE.Group();pivot.position.set(d.x1,0,d.y1);
-    var leaf2=bx(W-0.05,H-0.04,0.14,ext?'#3d4f63':'#efece6');leaf2.position.set(W/2,H/2,0);pivot.add(leaf2);
+    var leaf2=bx(W-0.05,H-0.04,0.14,realMat('door',ext?'#3d4f63':'#efece6',{rough:ext?0.4:0.5,env:0.25}));leaf2.position.set(W/2,H/2,0);pivot.add(leaf2);
     [-0.1,0.1].forEach(function(z){var k=new THREE.Mesh(new THREE.SphereGeometry(0.1,12,10),mat('#d6bf7a',{metalness:0.8,roughness:0.3}));k.position.set(W-0.4,3,z);pivot.add(k);});
     vert.add(pivot);doorObjs[d.id]={d:d,type:'swing',pivot:pivot,base:base,W:W};tagSel(pivot,{type:'door',id:d.id});
     // jamb casing
@@ -222,7 +310,7 @@ function buildItem(it){
   function add(m,x,y,z){m.position.set(x,y,z);g.add(m);return m;}
   switch(it.kind){
     case 'bed':var hb=Math.max(h+1.6,3.6);add(bx(w,1.0,d,c),0,0.5,0);add(bx(w-0.45,0.8,d-0.25,'#f3f1ee'),-0.2,1.4,0);add(bx(0.35,hb,d+0.1,c),w/2-0.175,hb/2,0);
-      [-d/4,d/4].forEach(function(z){add(bx(1.1,0.35,d/2-0.45,'#ffffff'),w/2-1.0,1.95,z);});add(bx(w*0.42,0.1,d-0.15,'#6b4fb3'),-w*0.25,1.84,0);break;
+      [-d/4,d/4].forEach(function(z){add(bx(1.1,0.35,d/2-0.45,'#ffffff'),w/2-1.0,1.95,z);});add(bx(w*0.42,0.1,d-0.15,'#5d6b7a'),-w*0.25,1.84,0);break;
     case 'sofa':add(bx(w,1.4,d,c),0,0.7,0);add(bx(0.75,h,d,c),-w/2+0.375,h/2,0);add(bx(w,2.0,0.55,c),0,1.0,-d/2+0.275);add(bx(w,2.0,0.55,c),0,1.0,d/2-0.275);
       add(bx(w-0.9,0.35,d-1.3,'#6b6f8c'),0.2,1.55,0);break;
     case 'chair':add(bx(w,1.5,d,c),0,0.75,0);add(bx(w,h,0.5,c),0,h/2,d/2-0.25);break;
@@ -250,6 +338,7 @@ function buildItem(it){
       [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(q){var t=add(cyl(wr,wr,0.7,'#141416',{roughness:0.9}),q[0]*w*0.32,wr,q[1]*(d/2-0.3));t.rotation.x=Math.PI/2;});break;
     default:add(bx(w,h,d,c),0,h/2,0);
   }
+  realItem(g,it,c);
   g.position.set(it.cx,0,it.cy);g.rotation.y=-(it.rot||0)*Math.PI/180;house.add(g);tagSel(g,{type:'item',id:it.id});
   if(h>=1.4&&it.kind!=='plant'){var a=(it.rot||0)*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a);var pts=[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2]].map(function(p){return [it.cx+p[0]*ca-p[1]*sa,it.cy+p[0]*sa+p[1]*ca];});
     for(var q=0;q<4;q++){var p1=pts[q],p2=pts[(q+1)%4];colSegs.push({x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],r:0.02});}}
