@@ -29,9 +29,11 @@ function normalize(m){
   m.specs.site=Object.assign({ground:'grass',sky:'day',trees:'some',fence:false,drive:true},m.specs.site||{});
   ['walls','doors','windows','rooms','items','fixtures'].forEach(function(k){if(!Array.isArray(m[k]))m[k]=[];});
   if(!Array.isArray(m.checkIgnore))m.checkIgnore=[];
+  if(m.onFloor2&&m.floor2&&typeof swapLevels==='function')swapLevels(m);else delete m.onFloor2;
+  if(m.floor2)['walls','doors','windows','rooms','items','fixtures'].forEach(function(k){if(!Array.isArray(m.floor2[k]))m.floor2[k]=[];});
 }
 var COLL={wall:'walls',door:'doors',window:'windows',room:'rooms',item:'items',fixture:'fixtures'};
-function uid(p){var all={};['walls','doors','windows','rooms','items','fixtures'].forEach(function(k){model[k].forEach(function(o){all[o.id]=1;});});var i=1;while(all[p+i])i++;return p+i;}
+function uid(p){var all={};['walls','doors','windows','rooms','items','fixtures'].forEach(function(k){model[k].forEach(function(o){all[o.id]=1;});if(model.floor2&&model.floor2[k])model.floor2[k].forEach(function(o){all[o.id]=1;});});var i=1;while(all[p+i])i++;return p+i;}
 function fmt(v){if(v==null||isNaN(v))return '';var neg=v<0;v=Math.abs(v);var ft=Math.floor(v+1e-9);var inch=Math.round((v-ft)*12*4)/4;if(inch>=12){ft++;inch-=12;}var is=Number.isInteger(inch)?String(inch):String(inch);return (neg?'-':'')+ft+"'-"+is+'"';}
 function parseLen(s){if(typeof s==='number')return s;s=String(s).trim().replace(/[′’]/g,"'").replace(/[″”]/g,'"');if(s==='')return null;
   var m=s.match(/^(-?\d+(?:\.\d+)?)\s*(?:'|ft)\s*-?\s*(\d+(?:\.\d+)?)?\s*(?:"|in)?$/);if(m)return parseFloat(m[1])+(m[2]?parseFloat(m[2])/12:0);
@@ -275,21 +277,27 @@ function tagSel(obj,sel){obj.traverse(function(m){if(m.isMesh){m.userData.sel=se
 
 function rebuild(){
   if(house){scene.remove(house);disposeTree(house);}
-  house=new THREE.Group();vert=new THREE.Group();ceilG=new THREE.Group();house.add(vert);house.add(ceilG);
-  colSegs=[];doorObjs={};pickables=[];
-  var S=model.specs,bb=bounds();
-  var slabM=realMat('plaster','#8f8c86',{rough:0.9});(model.rooms.length?model.rooms:[{x:bb.cx-bb.w/2,y:bb.cy-bb.d/2,w:bb.w,d:bb.d}]).forEach(function(r){var sb=bx(r.w+0.6,0.3,r.d+0.6,slabM);sb.position.set(r.x+r.w/2,-0.15-((r.x*7+r.y*3)%5)*0.0004,r.y+r.d/2);sb.castShadow=false;house.add(sb);});
+  var root=new THREE.Group();colSegs=[];doorObjs={};pickables=[];fixtureObjs=[];LEVELS=[];
+  var S=model.specs,bb=bounds(),holes=stairHoles();house=root;
   buildSite(bb);
-  model.rooms.forEach(function(r,i){
-    var f=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(r.w,0.1),Math.max(r.d,0.1)),floorMaterial(r));
-    f.rotation.x=-Math.PI/2;f.position.set(r.x+r.w/2,0.004+i*0.0015,r.y+r.d/2);f.receiveShadow=true;house.add(f);tagSel(f,{type:'room',id:r.id});
-    var c=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(r.w,0.1),Math.max(r.d,0.1)),paintMat('#f3f1ec',{side:THREE.DoubleSide,rough:0.95}));worldUV(c,surf('plaster').ft,r.x,r.y);
-    c.rotation.x=Math.PI/2;c.position.set(r.x+r.w/2,roomCeil(r)-i*0.0015,r.y+r.d/2);ceilG.add(c);});
-  model.walls.forEach(buildWall);
-  model.windows.forEach(buildWindow);
-  model.doors.forEach(buildDoor);
-  model.items.forEach(buildItem);
-  fixtureObjs=[];if(view.elec!==false)model.fixtures.forEach(buildFixture);
+  // Each floor is built into its own group, raised to its floor height. Only the floor being edited
+  // lives in model.walls etc.; eachLevel() swaps the other one in while it is built.
+  eachLevel(function(LV){var lg=new THREE.Group();lg.position.y=LV.elev;root.add(lg);house=lg;vert=new THREE.Group();ceilG=new THREE.Group();lg.add(vert);lg.add(ceilG);
+    var c0=colSegs.length,p0=pickables.length,d0=Object.keys(doorObjs);
+    if(LV.lv===0){var slabM=realMat('plaster','#8f8c86',{rough:0.9});(model.rooms.length?model.rooms:[{x:bb.cx-bb.w/2,y:bb.cy-bb.d/2,w:bb.w,d:bb.d}]).forEach(function(r){var sb=bx(r.w+0.6,0.3,r.d+0.6,slabM);sb.position.set(r.x+r.w/2,-0.15-((r.x*7+r.y*3)%5)*0.0004,r.y+r.d/2);sb.castShadow=false;house.add(sb);});}
+    else model.rooms.forEach(function(r){house.add(upperSlab(r,holes));});
+    model.rooms.forEach(function(r,i){
+      var f=roomPlane(r,LV.lv>0?holes:[],floorMaterial(r),false);f.position.y=0.004+i*0.0015;f.receiveShadow=true;house.add(f);tagSel(f,{type:'room',id:r.id});
+      var c=roomPlane(r,LV.lv===0&&model.floor2?holes:[],paintMat('#f3f1ec',{side:THREE.DoubleSide,rough:0.95}),true);worldUV(c,surf('plaster').ft,r.x,r.y);
+      c.position.y=roomCeil(r)-i*0.0015;ceilG.add(c);});
+    model.walls.forEach(buildWall);if(LV.lv===0)rimBands();
+    model.windows.forEach(buildWindow);
+    model.doors.forEach(buildDoor);
+    model.items.forEach(buildItem);
+    if(view.elec!==false)model.fixtures.forEach(buildFixture);
+    if(LV.top)buildRoof(LV);
+    levelTag(LV,c0,p0,d0);LEVELS.push({lv:LV.lv,elev:LV.elev,g:lg,vert:vert,ceil:ceilG,active:LV.active});});
+  house=root;var AL=LEVELS.filter(function(x){return x.active;})[0]||LEVELS[0];vert=AL.vert;ceilG=AL.ceil;
   scene.add(house);
   var s=Math.max(bb.w,bb.d)/2+14;var sc=sun.shadow.camera;sc.left=-s;sc.right=s;sc.top=s;sc.bottom=-s;sc.near=1;sc.far=320;sc.updateProjectionMatrix();
   sun.target.position.set(bb.cx,0,bb.cy);sun.position.set(bb.cx-30,80,bb.cy+40);
@@ -442,8 +450,9 @@ function buildItem(it){
     default:if(!buildExtra(it,g,add,w,d,h,c))add(bx(w,h,d,c),0,h/2,0);
   }
   realItem(g,it,c);
-  g.position.set(it.cx,0,it.cy);g.rotation.y=-(it.rot||0)*Math.PI/180;house.add(g);tagSel(g,{type:'item',id:it.id});
-  if(h>=1.4&&it.kind!=='plant'){var a=(it.rot||0)*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a);var pts=[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2]].map(function(p){return [it.cx+p[0]*ca-p[1]*sa,it.cy+p[0]*sa+p[1]*ca];});
+  g.position.set(it.cx,it.elev||0,it.cy);g.rotation.y=-(it.rot||0)*Math.PI/180;house.add(g);tagSel(g,{type:'item',id:it.id});
+  if(it.kind==='stairs')stairSegs(it);
+  else if(h>=1.4&&it.kind!=='plant'&&!((it.elev||0)>=1)&&WALLHUNG.indexOf(it.kind)<0){var a=(it.rot||0)*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a);var pts=[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2]].map(function(p){return [it.cx+p[0]*ca-p[1]*sa,it.cy+p[0]*sa+p[1]*ca];});
     for(var q=0;q<4;q++){var p1=pts[q],p2=pts[(q+1)%4];colSegs.push({x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],r:0.02});}}
 }
 function updateDoors(dt){
@@ -455,9 +464,9 @@ function updateDoors(dt){
     else o.g.position.set(o.mx+o.ox*o.W*e,0,o.my+o.oy*o.W*e);});
 }
 function dynSegs(){var out=[];Object.keys(doorObjs).forEach(function(id){var o=doorObjs[id],st=doorState[id]||{f:0},e=st.f*st.f*(3-2*st.f),d=o.d;
-  if(o.type==='swing'){var a=doorOpenAngle(d,e);out.push({x1:d.x1,y1:d.y1,x2:d.x1+o.W*Math.cos(a),y2:d.y1+o.W*Math.sin(a),r:0.09});}
-  else if(o.type==='overhead'){if(e<0.55)out.push({x1:o.mx-o.ux*o.W/2,y1:o.my-o.uy*o.W/2,x2:o.mx+o.ux*o.W/2,y2:o.my+o.uy*o.W/2,r:0.1});}
-  else{var cx=o.mx+o.ox*o.W*e,cy=o.my+o.oy*o.W*e;out.push({x1:cx-o.ux*o.W/2,y1:cy-o.uy*o.W/2,x2:cx+o.ux*o.W/2,y2:cy+o.uy*o.W/2,r:0.08});}});return out;}
+  if(o.type==='swing'){var a=doorOpenAngle(d,e);out.push({lv:o.lv,x1:d.x1,y1:d.y1,x2:d.x1+o.W*Math.cos(a),y2:d.y1+o.W*Math.sin(a),r:0.09});}
+  else if(o.type==='overhead'){if(e<0.55)out.push({lv:o.lv,x1:o.mx-o.ux*o.W/2,y1:o.my-o.uy*o.W/2,x2:o.mx+o.ux*o.W/2,y2:o.my+o.uy*o.W/2,r:0.1});}
+  else{var cx=o.mx+o.ox*o.W*e,cy=o.my+o.oy*o.W*e;out.push({lv:o.lv,x1:cx-o.ux*o.W/2,y1:cy-o.uy*o.W/2,x2:cx+o.ux*o.W/2,y2:cy+o.uy*o.W/2,r:0.08});}});return out;}
 function toggleDoor(id,force){var st=doorState[id]||(doorState[id]={f:0,target:0});st.target=force!=null?force:(st.target>0.5?0:1);}
 function doorName(d){return d.name||'door';}
 
@@ -467,14 +476,14 @@ function buildLabels(){var box=$('#labels');box.innerHTML='';labelEls=model.room
   el.innerHTML=esc(r.name)+'<span>'+esc(fmt(r.w))+' × '+esc(fmt(r.d))+' · '+esc(fmt(roomCeil(r)))+' clg</span>';box.appendChild(el);return {el:el,r:r};});}
 var v3=new THREE.Vector3();
 function updateLabels(){var show=view.labels&&view.mode==='orbit';var W=host.clientWidth,H=host.clientHeight;
-  labelEls.forEach(function(L){if(!show){L.el.style.display='none';return;}v3.set(L.r.x+L.r.w/2,0.5,L.r.y+L.r.d/2).project(camera);
+  labelEls.forEach(function(L){if(!show){L.el.style.display='none';return;}v3.set(L.r.x+L.r.w/2,0.5+activeElev(),L.r.y+L.r.d/2).project(camera);
     if(v3.z>1||v3.z<-1){L.el.style.display='none';return;}L.el.style.display='block';L.el.style.left=((v3.x+1)/2*W)+'px';L.el.style.top=((1-v3.y)/2*H)+'px';});}
 
 /* ---------- view state ---------- */
 function applyViewState(){var walk=view.mode==='walk';if(!house)return;
   ceilG.visible=walk||(view.ceilings&&view.cut>=0.999);vert.scale.y=walk?1:view.cut;sun.castShadow=view.shadows;
   document.body.classList.toggle('walk',walk);applyLighting();
-  $('#mOrbit').classList.toggle('on',!walk);$('#mWalk').classList.toggle('on',walk);}
+  $('#mOrbit').classList.toggle('on',!walk);$('#mWalk').classList.toggle('on',walk);levelsView();}
 function syncViewUI(){if(typeof syncSiteUI==='function')syncSiteUI();if(typeof TOGS!=='undefined')syncToolsUI();var S=model.specs;$('#ceilRange').value=S.ceiling;$('#ceilVal').textContent=fmt(S.ceiling);$('#tCeil').checked=view.ceilings;$('#tLabels').checked=view.labels;$('#tShadows').checked=view.shadows;
   $('#cutRange').value=view.cut;$('#cutVal').textContent=Math.round(view.cut*100)+'%';$('#eyeRange').value=S.eye;$('#eyeVal').textContent=fmt(S.eye);$('#spdRange').value=view.speed;$('#spdVal').textContent=view.speed+' ft/s';
   $('#snapSel').value=String(view.snap);$('#tIssues').checked=!!view.zones;$('#tDims').checked=view.dims!==false;$('#tElec').checked=view.elec!==false;$('#timeRange').value=view.time==null?15:view.time;$('#timeVal').textContent=fmtTime(view.time==null?15:view.time);$('#tLights').checked=!!view.lightsOn;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
@@ -508,7 +517,7 @@ function requestLock(){if(locked||isTouch)return;try{var p=cv.requestPointerLock
 document.addEventListener('pointerlockchange',function(){locked=document.pointerLockElement===cv;$('#walkHud').classList.toggle('locked',locked);});
 document.addEventListener('mousemove',function(e){if(locked&&view.mode==='walk')look(e.movementX,e.movementY);});
 function look(dx,dy){player.yaw-=dx*0.0024;player.pitch=clamp(player.pitch-dy*0.0024,-1.4,1.4);}
-function collide(px,pz){var R=0.6,segs=colSegs.concat(dynSegs());for(var it=0;it<4;it++){for(var i=0;i<segs.length;i++){var s=segs[i],vx=s.x2-s.x1,vz=s.y2-s.y1,L2=vx*vx+vz*vz||1e-9;
+function collide(px,pz){var R=0.6,segs=colSegs.concat(dynSegs()).filter(function(s){return s.lv==null||s.lv===walkLv;});for(var it=0;it<4;it++){for(var i=0;i<segs.length;i++){var s=segs[i],vx=s.x2-s.x1,vz=s.y2-s.y1,L2=vx*vx+vz*vz||1e-9;
   var t=clamp(((px-s.x1)*vx+(pz-s.y1)*vz)/L2,0,1),cx=s.x1+vx*t,cz=s.y1+vz*t,dx=px-cx,dz=pz-cz,d=Math.hypot(dx,dz),min=R+(s.r||0);
   if(d<min){if(d<1e-6){dx=1;dz=0;}else{dx/=d;dz/=d;}px=cx+dx*min;pz=cz+dz*min;}}}return [px,pz];}
 var ray=new THREE.Raycaster(),v2=new THREE.Vector2();
@@ -522,8 +531,8 @@ function updateWalk(dt){var f=0,s=0;if(keys.KeyW||keys.ArrowUp)f+=1;if(keys.KeyS
   f+=clamp(-joy.y/50,-1,1);s+=clamp(joy.x/50,-1,1);var m=Math.hypot(f,s);if(m>1){f/=m;s/=m;}
   var sp=view.speed*((keys.ShiftLeft||keys.ShiftRight)?1.9:1)*dt,fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw),rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw);
   var p=collide(player.x+(fx*f+rx*s)*sp,player.z+(fz*f+rz*s)*sp);player.x=p[0];player.z=p[1];
-  var eye=model.specs.eye||5.4;camera.position.set(player.x,eye,player.z);camera.rotation.set(player.pitch,player.yaw,0);
-  interior.position.set(player.x,Math.min(eye+2,model.specs.ceiling-0.5),player.z);
+  var eye=model.specs.eye||5.4,fy=walkFloorY();camera.position.set(player.x,eye+fy,player.z);camera.rotation.set(player.pitch,player.yaw,0);
+  interior.position.set(player.x,fy+Math.min(eye+2,model.specs.ceiling-0.5),player.z);
   var id=targetDoor(),txt='';if(id){var d=model.doors.filter(function(x){return x.id===id;})[0];var st=doorState[id]||{target:0};txt=(isTouch?'Tap Door · ':'E · ')+(st.target>0.5?'Close ':'Open ')+(d?doorName(d):'door');}
   if(txt!==lastPrompt){var el=$('#doorPrompt');el.textContent=txt;el.style.display=txt?'block':'none';lastPrompt=txt;}}
 
@@ -553,6 +562,7 @@ function click3d(e,p){if(tape.on&&view.mode==='orbit'){tapeClick(pickPoint(e.cli
   var rect=cv.getBoundingClientRect();v2.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);ray.setFromCamera(v2,camera);ray.far=Infinity;
   var hits=ray.intersectObjects(pickables,false).filter(function(h){return h.object.visible&&isVisible(h.object);});if(!hits.length){if(e.shiftKey)select(null);return;}
   var s=hits[0].object.userData.sel;if(!s)return;
+  if(s.inactive){if(s.type==='door')toggleDoor(s.id);return;}
   if(e.shiftKey||p.shift||document.body.classList.contains('editing')){select(s);showTab('edit');}
   else if(s.type==='door')toggleDoor(s.id);}
 function isVisible(o){while(o){if(!o.visible)return false;o=o.parent;}return true;}
@@ -598,12 +608,12 @@ window.addEventListener('blur',function(){keys={};});
 /* ---------- model changes ---------- */
 var undoStack=[],redoStack=[];
 function pushUndo(snap){undoStack.push(snap||JSON.stringify(model));if(undoStack.length>200)undoStack.shift();redoStack.length=0;}
-function undo(){if(!undoStack.length)return toast('Nothing to undo');redoStack.push(JSON.stringify(model));model=JSON.parse(undoStack.pop());validateSel();afterChange();}
-function redo(){if(!redoStack.length)return toast('Nothing to redo');undoStack.push(JSON.stringify(model));model=JSON.parse(redoStack.pop());validateSel();afterChange();}
+function undo(){if(!undoStack.length)return toast('Nothing to undo');redoStack.push(JSON.stringify(model));var f2=!!model.onFloor2;model=JSON.parse(undoStack.pop());keepFloor(f2);validateSel();afterChange();}
+function redo(){if(!redoStack.length)return toast('Nothing to redo');undoStack.push(JSON.stringify(model));var f2=!!model.onFloor2;model=JSON.parse(redoStack.pop());keepFloor(f2);validateSel();afterChange();}
 var rebuildQueued=false;
 function scheduleRebuild(){rebuildQueued=true;}
 function afterChange(){scheduleRebuild();renderPlan();renderInspector();renderSpecs();renderChecks();syncViewUI();updateDirty();}
-function updateDirty(){var cur=JSON.stringify(model),dirty=cur!==savedJSON,s=$('#saveState'),can=!!artifactApi||store.ready;
+function updateDirty(){var cur=canonJSON(model),dirty=cur!==savedJSON,s=$('#saveState'),can=!!artifactApi||store.ready;
   var nm='';
   s.textContent=nm+(dirty?(can?'Unsaved changes':'Edits kept in this browser'):(!artifactApi&&store.mode==='local'&&store.updated?'Saved in this browser':'Saved'));s.classList.toggle('dirty',dirty);
   $('#saveBtn').disabled=!dirty||!can;lsSet(LS_DRAFT,dirty?JSON.stringify({base:draftBase,model:model}):null);}
@@ -619,9 +629,9 @@ function buildDoc(m){var css=document.getElementById('app-css').textContent,tpl=
   return '<!DOCTYPE html>\n<html lang="en">\n<head>\n'+HEAD_STATIC+'<style id="app-css">'+css+'</style>\n<script id="plan-data" type="application/json">'+json+'<\/script>\n</head>\n<body>\n<template id="tpl">'+tpl+'</template>\n<script id="app-src">'+src+'<\/script>\n</body>\n</html>\n';}
 var saving=false;
 function save(){if(saving)return;if(!artifactApi){saveSlot();return;}
-  if(JSON.stringify(model)===savedJSON){toast('Nothing new to save');return;}
+  if(canonJSON(model)===savedJSON){toast('Nothing new to save');return;}
   saving=true;$('#saveBtn').disabled=true;$('#saveState').textContent='Saving…';
-  Promise.resolve(artifactApi.publish(buildDoc(model))).then(function(){savedJSON=JSON.stringify(model);lsSet(LS_DRAFT,null);toast('Saved');saving=false;updateDirty();})
+  Promise.resolve(artifactApi.publish(buildDoc(model))).then(function(){savedJSON=canonJSON(model);lsSet(LS_DRAFT,null);toast('Saved');saving=false;updateDirty();})
   .catch(function(err){saving=false;var c=err&&(err.code||err.name);toast(c==='conflict'?'A newer version was saved elsewhere, so the page is reloading.':c==='not_writer'||c==='not_granted'?'This copy is view-only, so edits stay in this browser.':'Couldn\'t save'+(c?' ('+c+')':'')+'. Your edits are still here.',4200);updateDirty();});}
 function openIO(mode){var dlg=$('#ioDlg');dlg.hidden=false;var exp=mode==='export';$('#ioTitle').textContent=exp?'Export plan data':'Import plan data';
   $('#ioMsg').textContent=exp?'This JSON holds every wall, door, window, room, item and spec. Copy it or download it, then load it again with Import.':'Paste plan JSON, or choose a .json file, then click Load plan.';
@@ -664,16 +674,16 @@ function writeSlot(slot,name,m,base){return backend.write(slot,name,m,base,false
 function failMsg(j){var e=j&&j.error;if(e==='cancelled')return;
   toast(e==='bad_passcode'?'Wrong passcode, so nothing was saved.':e==='no_passcode'||e==='not_configured'?'Online saving isn\'t switched on for this site yet.':e==='quota'?'This browser is out of storage space. Use Export JSON to keep a copy.':'Couldn\'t save'+(e?' ('+e+')':'')+'. Your edits are still here.',4200);}
 function saveSlot(){if(!store.ready){toast('Still connecting. Try again in a second.');return;}
-  var snap=JSON.stringify(model);if(snap===savedJSON&&store.updated){toast('Nothing new to save');return;}
+  var snap=JSON.stringify(model);if(canonStr(snap)===savedJSON&&store.updated){toast('Nothing new to save');return;}
   saving=true;$('#saveBtn').disabled=true;$('#saveState').textContent='Saving…';
   writeSlot(store.slot,store.name,JSON.parse(snap),store.updated).then(function(j){saving=false;if(!j.ok){failMsg(j);updateDirty();return;}
-    store.updated=j.updated;savedJSON=snap;draftBase=slotBase();lsSet(LS_DRAFT,null);
+    store.updated=j.updated;savedJSON=canonStr(snap);draftBase=slotBase();lsSet(LS_DRAFT,null);
     toast(store.mode==='cloud'?'Saved. It opens like this on any device.':'Saved in this browser');refreshSlots();updateDirty();})
   .catch(function(){saving=false;toast('Couldn\'t reach the server. Your edits are still here.',4200);updateDirty();});}
 function openDoc(d,startup){normalize(d.model);store.slot=d.slot;store.name=d.name||d.slot;store.updated=d.updated||null;lsSet(LS_SLOT,d.slot==='main'?null:d.slot);
   savedJSON=JSON.stringify(d.model);draftBase=slotBase();var dr=startDraft;startDraft=null;
   if(startup&&dr&&dr.base===draftBase&&dr.model){model=dr.model;normalize(model);}
-  else{if(startup&&dr&&JSON.stringify(model)!==savedJSON){pushUndo();toast('Opened the saved "'+store.name+'". Your older unsaved edits are one Undo away.',5200);}model=clone(d.model);}
+  else{if(startup&&dr&&canonJSON(model)!==savedJSON){pushUndo();toast('Opened the saved "'+store.name+'". Your older unsaved edits are one Undo away.',5200);}model=clone(d.model);}
   if(!startup){undoStack.length=0;redoStack.length=0;}
   sel=null;afterChange();}
 function resetToMain(){store.slot='main';store.name='Main plan';store.updated=null;lsSet(LS_SLOT,null);model=clone(embedded);savedJSON=JSON.stringify(embedded);draftBase=EMBED_HASH;
@@ -698,9 +708,9 @@ function renderSlots(){if($('#designName'))$('#designName').textContent=store.na
     store.mode==='cloud'?'Options are saved online, so they open on any phone or computer with this link. The first save on each device asks for the site passcode.':
     'Options are saved in this browser only. Use Export JSON to move a plan to another device.';}
 function switchSlot(slug){if(slug===store.slot)return;
-  if(slug==='main'&&!store.slots.some(function(s){return s.slot==='main';})){if(JSON.stringify(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
+  if(slug==='main'&&!store.slots.some(function(s){return s.slot==='main';})){if(canonJSON(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
     resetToMain();renderSlots();goView('ne');toast('Opened "Main plan"',1600);return;}
-  if(JSON.stringify(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
+  if(canonJSON(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
   backend.read(slug).then(function(d){if(!d){toast('That option couldn\'t be loaded');renderSlots();return;}openDoc(d,false);renderSlots();goView('ne');toast('Opened "'+d.name+'"',1600);})
   .catch(function(){toast('Couldn\'t reach the server');renderSlots();});}
 function blankModel(){return {specs:{name:'New plan'},walls:[],doors:[],windows:[],rooms:[],items:[],fixtures:[],checkIgnore:[]};}
@@ -723,7 +733,7 @@ function garageTemplate(){var T=0.5,W=function(id,a,b,c,d){return {id:id,x1:a,y1
 function createSlot(){var name=($('#slotName').value||'').trim(),slug=slugOf(name),start=$('#slotStart').value;
   if(!slug){toast('Give the option a name');return;}
   if(slug===store.slot||store.slots.some(function(s){return s.slot===slug;})){toast('There\'s already an option with that name');return;}
-  if(start!=='copy'&&JSON.stringify(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Start the new option anyway and drop them?'))return;
+  if(start!=='copy'&&canonJSON(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Start the new option anyway and drop them?'))return;
   var m=start==='copy'?clone(model):start==='garage'?garageTemplate():start==='sketch'?clone(DEFAULT_MODEL):blankModel();normalize(m);if(start!=='copy')m.specs.name=name;
   writeSlot(slug,name,m,null).then(function(j){if(!j.ok){failMsg(j);return;}openDoc({slot:slug,name:name,updated:j.updated,model:m},false);$('#slotNew').hidden=true;$('#slotName').value='';
     refreshSlots();goView('ne');toast('Created "'+name+'"',1800);}).catch(function(){toast('Couldn\'t reach the server');});}
@@ -775,7 +785,7 @@ function saveAsNew(){var name=($('#dpNewName').value||'').trim(),slug=slugOf(nam
     openDoc({slot:slug,name:name,updated:j.updated,model:m},false);$('#dpNewName').value='';closeDesignPop();refreshSlots();toast('Saved as "'+name+'". You\'re working on it now.',2600);}).catch(function(){toast('Couldn\'t reach the server');});}
 function renameDesign(){var name=($('#dpRename').value||'').trim();if(!name){toast('Give the design a name');return;}if(name===store.name){closeDesignPop();return;}
   var snap=JSON.stringify(model);writeSlot(store.slot,name,JSON.parse(snap),store.updated).then(function(j){if(!j.ok){failMsg(j);return;}
-    store.name=name;store.updated=j.updated;savedJSON=snap;draftBase=slotBase();lsSet(LS_DRAFT,null);closeDesignPop();refreshSlots();updateDirty();toast('Renamed and saved as "'+name+'"');}).catch(function(){toast('Couldn\'t reach the server');});}
+    store.name=name;store.updated=j.updated;savedJSON=canonStr(snap);draftBase=slotBase();lsSet(LS_DRAFT,null);closeDesignPop();refreshSlots();updateDirty();toast('Renamed and saved as "'+name+'"');}).catch(function(){toast('Couldn\'t reach the server');});}
 $('#dpNewBtn').onclick=saveAsNew;$('#dpRenameBtn').onclick=renameDesign;
 $('#dpNewName').addEventListener('keydown',function(e){if(e.key==='Enter')saveAsNew();});$('#dpRename').addEventListener('keydown',function(e){if(e.key==='Enter')renameDesign();});
 $('#slotName').addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Enter')createSlot();});
@@ -896,7 +906,7 @@ function toPlan(e){var pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;var
 function renderPlan(){if(!document.body.classList.contains('editing'))return;var h=[],k=pvb.w/(svg.clientWidth||600),S=model.specs;
   var sw=function(px){return (px*k).toFixed(3);};
   h.push('<defs><pattern id="g1" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M1 0H0V1" fill="none" stroke="#1e1930" stroke-width="'+sw(1)+'"/></pattern><pattern id="g5" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="url(#g1)"/><path d="M5 0H0V5" fill="none" stroke="#2c2446" stroke-width="'+sw(1)+'"/></pattern></defs>');
-  h.push('<rect x="'+(pvb.x-200)+'" y="'+(pvb.y-200)+'" width="'+(pvb.w+400)+'" height="'+(pvb.h+400)+'" fill="url(#g5)" data-bg="1"/>');
+  h.push('<rect x="'+(pvb.x-200)+'" y="'+(pvb.y-200)+'" width="'+(pvb.w+400)+'" height="'+(pvb.h+400)+'" fill="url(#g5)" data-bg="1"/>');h.push(ghostLevelSVG(k));
   var isSel=function(t,id){return sel&&sel.type===t&&sel.id===id;};
   model.rooms.forEach(function(r){var s=isSel('room',r.id);h.push('<rect data-type="room" data-id="'+r.id+'" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.d+'" fill="'+esc(r.floor||'#8f7356')+'" fill-opacity="'+(s?0.42:0.22)+'" stroke="'+(s?'#2de2e6':'#6a5f8a')+'" stroke-width="'+sw(s?2:1)+'" stroke-dasharray="'+(s?'':sw(5)+' '+sw(4))+'"/>');});
   var fixSvg=planFixSVG(k,isSel);
@@ -943,7 +953,7 @@ svg.addEventListener('pointermove',function(e){if(!pdrag)return;
     else if(hh==='ibr'){var a=(O.rot||0)*Math.PI/180,lx=dx*Math.cos(a)+dy*Math.sin(a),ly=-dx*Math.sin(a)+dy*Math.cos(a);var nw=Math.max(0.5,snapV(O.w+lx)),nd=Math.max(0.5,snapV(O.d+ly));
       var cdx=(nw-O.w)/2,cdy=(nd-O.d)/2;o.w=r3(nw);o.d=r3(nd);o.cx=r3(O.cx+cdx*Math.cos(a)-cdy*Math.sin(a));o.cy=r3(O.cy+cdx*Math.sin(a)+cdy*Math.cos(a));}}
   renderPlan();scheduleRebuild();});
-function endPlanDrag(){guides=[];if(!pdrag)return;var d=pdrag;pdrag=null;if(d.kind==='pan'||!d.moved)return;var o=getObj();if(o&&d.kind==='move'&&(sel.type==='door'||sel.type==='window'))snapOpening(o);if(o&&d.kind==='move'&&sel.type==='fixture'&&FIX[o.kind]&&FIX[o.kind].mount==='wall')snapFixture(o);pushUndo(d.before);afterChange();}
+function endPlanDrag(){guides=[];if(!pdrag)return;var d=pdrag;pdrag=null;if(d.kind==='pan'||!d.moved)return;var o=getObj();if(o&&d.kind==='move'&&(sel.type==='door'||sel.type==='window'))snapOpening(o);if(o&&d.kind==='move'&&sel.type==='fixture'&&FIX[o.kind]&&FIX[o.kind].mount==='wall')snapFixture(o);if(o&&d.kind==='move'&&sel.type==='item'&&WALLHUNG.indexOf(o.kind)>=0)hangOnWall(o);pushUndo(d.before);afterChange();}
 svg.addEventListener('pointerup',endPlanDrag);svg.addEventListener('pointercancel',endPlanDrag);
 svg.addEventListener('contextmenu',function(e){e.preventDefault();});
 svg.addEventListener('wheel',function(e){e.preventDefault();var p=toPlan(e),f=Math.exp(e.deltaY*0.0015);var nw=clamp(pvb.w*f,5,400),ff=nw/pvb.w;pvb.x=p.x-(p.x-pvb.x)*ff;pvb.y=p.y-(p.y-pvb.y)*ff;pvb.w*=ff;pvb.h*=ff;setVB();renderPlan();},{passive:false});
@@ -1087,14 +1097,15 @@ function applyLighting(){if(!house)return;var t=view.time==null?15:view.time,th=
   hemi.intensity=0.16+0.56*day;amb.intensity=0.08+0.12*day;
   var night=new THREE.Color('#05040a'),dayBg=new THREE.Color('#0c0a14');scene.background.copy(night).lerp(dayBg,day);scene.fog.color.copy(scene.background);
   if(skyMesh){var dim=0.2+0.8*day;skyMesh.material.color.setScalar(dim);scene.fog.color.copy(skyMesh.userData.hz).multiplyScalar(dim);scene.background.copy(scene.fog.color);}
-  var on=!!view.lightsOn;if(lightsG)lightsG.visible=on;
+  var on=!!view.lightsOn;if(lightsG)lightsG.visible=on;if(typeof lampGlow==='function')lampGlow(on);
   fixtureObjs.forEach(function(o){var gl=o.g.userData.glow;if(gl&&gl.material&&gl.material.emissive)gl.material.emissiveIntensity=on?1.4:0.15;});
   interior.intensity=view.mode==='walk'?(on?0.15:0.55*(0.4+0.6*day)):0;}
 function buildLights(){if(lightsG){scene.remove(lightsG);}lightsG=new THREE.Group();scene.add(lightsG);var n=0,MAX=18,lit={};
-  function pl(x,y,z,i){if(n>=MAX)return;var L=new THREE.PointLight(0xffe4bf,i,22,2);L.position.set(x,y,z);lightsG.add(L);n++;}
+  function pl(x,y,z,i){if(n>=MAX)return;var L=new THREE.PointLight(0xffe4bf,i,22,2);L.position.set(x,y+activeElev(),z);lightsG.add(L);n++;}
   fixtureObjs.forEach(function(o){var f=o.f;if(LIGHT_KINDS.indexOf(f.kind)<0)return;var r=roomAt(f.x,f.y);if(r)lit[r.id]=1;var C=fixCeil(f);
     pl(f.x,f.kind==='sconce'?fixH(f)+0.3:f.kind==='pendant'?C-2.6:C-0.6,f.y,f.kind==='recessed'?0.55:f.kind==='sconce'?0.35:0.75);});
   // Rooms with no light placed still get a soft ceiling light so "lights on" works on any plan.
+  lampLights(pl,lit);
   model.rooms.forEach(function(r){if(lit[r.id])return;pl(r.x+r.w/2,roomCeil(r)-0.6,r.y+r.d/2,Math.min(0.85,0.3+r.w*r.d/400));});
   lightsG.visible=!!view.lightsOn;}
 $('#timeRange').addEventListener('input',function(e){view.time=parseFloat(e.target.value);$('#timeVal').textContent=fmtTime(view.time);applyLighting();saveView();});
@@ -1139,8 +1150,8 @@ function renderCatalog(){var box=$('#catalog');if(!box)return;var cats=['All'].c
     b.addEventListener('dragstart',function(e){e.dataTransfer.setData('text/x-house-item',b.dataset.pi);e.dataTransfer.setData('text/plain',b.dataset.pi);e.dataTransfer.effectAllowed='copy';});});}
 function findPreset(key){var parts=key.split('|'),hit=null;CATALOG.forEach(function(c){if(c[0]!==parts[0])return;c[1].forEach(function(p){if(p[0]===parts[1])hit=p;});});return hit;}
 function addPreset(key,at){var p=findPreset(key);if(!p)return;var c=at||viewCenter();pushUndo();
-  var o={id:uid('i'),label:p[0],kind:p[1],cx:snapV(c.x),cy:snapV(c.y),w:p[2],d:p[3],h:p[4],rot:0,color:p[5],note:''};if(p[6])o.sinks=p[6];
-  model.items.push(o);sel={type:'item',id:o.id};setEditing(true);afterChange();toast(p[0]+' added ('+fmt(p[2])+' × '+fmt(p[3])+'). Drag to place it, R or Rotate 90° to turn it.');}
+  var o={id:uid('i'),label:p[0],kind:p[1],cx:snapV(c.x),cy:snapV(c.y),w:p[2],d:p[3],h:p[4],rot:0,color:styleColor(p),note:''};if(p[6])o.sinks=p[6];if(p[7])Object.assign(o,p[7]);
+  model.items.push(o);if(WALLHUNG.indexOf(o.kind)>=0)hangOnWall(o);sel={type:'item',id:o.id};setEditing(true);afterChange();toast(p[0]+' added ('+fmt(p[2])+' × '+fmt(p[3])+'). Drag to place it, R or Rotate 90° to turn it.');}
 $('#catSearch').addEventListener('input',function(e){catQ=e.target.value;renderCatalog();});
 svg.addEventListener('dragover',function(e){if(e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types,'text/x-house-item')>=0){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
 svg.addEventListener('drop',function(e){var k=e.dataTransfer&&e.dataTransfer.getData('text/x-house-item');if(!k)return;e.preventDefault();addPreset(k,toPlan(e));});
@@ -1263,7 +1274,7 @@ function roomAt(x,y){for(var i=0;i<model.rooms.length;i++){var r=model.rooms[i];
 function inchStr(v){return Math.round(v*12)+'"';}
 
 function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.list;
-  var out=[],walls=wallSolids(),items=model.items.filter(function(it){return it.kind!=='person';}),polys={};items.forEach(function(it){polys[it.id]=itemPoly(it);});
+  var out=[],walls=wallSolids(),items=model.items.filter(onFloorItem),polys={};items.forEach(function(it){polys[it.id]=itemPoly(it);});
   function add(sev,rule,refs,title,detail,zone){out.push({sev:sev,rule:rule,refs:refs,title:title,detail:detail,zone:zone,key:rule+':'+refs.map(function(r){return r.id;}).join('+')});}
   function ref(type,o){return {type:type,id:o.id};}
   // What blocks a zone: walls (minus doorways) and items other than the ones listed. Returns the
@@ -1390,7 +1401,7 @@ function issueZones(){return runChecks().filter(function(o){if(o.ignored||!o.zon
 function planIssueSVG(k){var h=[];issueZones().forEach(function(o){var f=CK.focus===o.key,c=SEV[o.sev].c;
   h.push('<polygon points="'+o.zone.map(function(p){return r3(p[0])+','+r3(p[1]);}).join(' ')+'" fill="'+c+'" fill-opacity="'+(f?0.42:0.18)+'" stroke="'+c+'" stroke-width="'+(k*(f?2.5:1.2)).toFixed(3)+'" stroke-dasharray="'+(f?'':(k*4).toFixed(3)+' '+(k*3).toFixed(3))+'" pointer-events="none"/>');});return h.join('');}
 var issueG=null;
-function buildIssues3D(){if(issueG){scene.remove(issueG);issueG.traverse(function(m){if(m.geometry)m.geometry.dispose();if(m.material)m.material.dispose();});}issueG=new THREE.Group();scene.add(issueG);
+function buildIssues3D(){if(issueG){scene.remove(issueG);issueG.traverse(function(m){if(m.geometry)m.geometry.dispose();if(m.material)m.material.dispose();});}issueG=new THREE.Group();issueG.position.y=activeElev();scene.add(issueG);
   issueZones().forEach(function(o,i){var m=new THREE.MeshBasicMaterial({color:new THREE.Color(SEV[o.sev].c).convertSRGBToLinear(),transparent:true,opacity:CK.focus===o.key?0.7:0.5,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
     var sh=new THREE.Shape(o.zone.map(function(p){return new THREE.Vector2(p[0],p[1]);}));var mesh=new THREE.Mesh(new THREE.ShapeGeometry(sh),m);mesh.rotation.x=Math.PI/2;mesh.position.y=0.03+i*0.0005;mesh.renderOrder=2;issueG.add(mesh);
     var lg=new THREE.BufferGeometry().setFromPoints(o.zone.map(function(p){return new THREE.Vector3(p[0],0.06,p[1]);}));var ln=new THREE.LineLoop(lg,new THREE.LineBasicMaterial({color:new THREE.Color(SEV[o.sev].c).convertSRGBToLinear(),toneMapped:false}));ln.renderOrder=3;issueG.add(ln);});}
@@ -1425,6 +1436,6 @@ function frame(now){var dt=Math.min(0.05,(now-last)/1000);last=now;
 syncViewUI();renderSpecs();renderInspector();renderChecks();rebuild();resize();
 (function(){var bb=bounds();orbit.tx=bb.cx;orbit.tz=bb.cy;})();goView('ne');tween.dur=1;
 updateDirty();
-if(JSON.stringify(model)!==savedJSON)setTimeout(function(){toast('Your unsaved edits from last time were restored');},600);
+if(canonJSON(model)!==savedJSON)setTimeout(function(){toast('Your unsaved edits from last time were restored');},600);
 requestAnimationFrame(frame);
 })();

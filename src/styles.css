@@ -206,3 +206,7 @@ body.taping #view3d canvas{cursor:crosshair}
 .fit-list li em{font-style:normal;font-size:11.5px;color:var(--muted)}
 .fit-list li.no{opacity:.6}
 .btn.mini{min-height:28px;padding:3px 10px;font-size:12px;width:auto!important}
+.lv-seg{display:flex;margin-bottom:8px}.lv-seg button{flex:1}
+#lvSeg[hidden]{display:none}
+.row select,.row .txt{flex:1;min-width:0}
+#labels.under-roof{display:none}

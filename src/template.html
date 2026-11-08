@@ -68,6 +68,7 @@
 <div class="group"><div class="g-title">Furniture catalog</div>
 <input type="search" id="catSearch" class="cat-search" placeholder="Search: queen bed, washer, car…" aria-label="Search the catalog">
 <div id="catChips" class="chips"></div>
+<div class="row"><span class="lbl">Style</span><select id="catStyle" aria-label="Furniture style"><option value="any">Any (default colors)</option><option value="modern">Modern</option><option value="farmhouse">Farmhouse</option><option value="traditional">Traditional</option><option value="midcentury">Mid-century</option><option value="coastal">Coastal</option><option value="industrial">Industrial</option></select></div>
 <div id="catalog" class="cat-grid"></div>
 <p class="hint">Click to add in the middle of the plan, or drag a card onto the plan. Sizes are typical real-world sizes; change them in the selection below.</p></div>
 <div class="group"><div class="g-title" id="inspTitle">Selection</div><div id="inspector"></div></div>
@@ -96,6 +97,18 @@
 <div class="fit-dims"><input type="text" id="fitW" class="txt" inputmode="decimal" placeholder="Width 7'" aria-label="Width"><span>×</span><input type="text" id="fitD" class="txt" inputmode="decimal" placeholder="Depth 38&quot;" aria-label="Depth"><span>×</span><input type="text" id="fitH" class="txt" inputmode="decimal" placeholder="Height" aria-label="Height (optional)"></div>
 <button class="btn primary" id="fitBtn" style="margin-top:8px">Check every room</button>
 <div id="fitOut"></div>
+</details>
+<details class="tg"><summary>Floors &amp; roof</summary>
+<div id="floorBox"></div>
+<div class="row" style="margin-top:12px"><span class="lbl">Roof</span><select id="roofStyle" aria-label="Roof style"><option value="none">No roof</option><option value="gable">Gable</option><option value="hip">Hip</option><option value="flat">Flat</option></select></div>
+<div class="roof-only">
+<div class="row"><span class="lbl">Pitch</span><select id="roofPitch" aria-label="Roof pitch"></select></div>
+<div class="row"><span class="lbl">Overhang</span><input id="roofOver" class="txt" inputmode="decimal" aria-label="Overhang"></div>
+<div class="row"><span class="lbl">Material</span><select id="roofMat" aria-label="Roof material"><option value="shingle">Asphalt shingles</option><option value="metal">Standing-seam metal</option></select></div>
+<div class="row"><span class="lbl">Color</span><select id="roofColor" aria-label="Roof color"></select></div>
+<label class="tog"><input type="checkbox" id="roofGut"> Gutters and downspouts</label>
+<label class="tog"><input type="checkbox" id="tRoof"> Show the roof (hides it inside walk mode)</label>
+</div>
 </details>
 </section>
 <section class="pane" data-pane="check">
@@ -127,7 +140,8 @@
 <div id="planWrap"><svg id="plan" role="img" aria-label="Editable floor plan"></svg>
 <div class="plan-tools"><div class="seg" role="group" aria-label="Plan tool"><button data-tool="select" class="on">Select<kbd>V</kbd></button><button data-tool="wall">Draw walls<kbd>B</kbd></button><button data-tool="measure">Measure<kbd>M</kbd></button></div>
 <select id="wallType" aria-label="New wall type"><option value="int">Interior wall</option><option value="ext">Exterior wall</option></select>
-<label class="tog mini"><input type="checkbox" id="tDims" checked> Dimensions</label></div>
+<label class="tog mini"><input type="checkbox" id="tDims" checked> Dimensions</label>
+<div class="seg" id="lvSeg" role="group" aria-label="Floor" hidden><button data-lv="0">1st floor</button><button data-lv="1">2nd floor</button></div></div>
 <button class="btn plan-fit" id="fitPlan">Fit</button>
 <div class="plan-hint">Scroll to zoom · drag empty space to pan · Del removes</div></div>
 <div id="view3d"><div id="labels"></div>
