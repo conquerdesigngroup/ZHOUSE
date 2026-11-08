@@ -25,6 +25,11 @@ src/head.html        <head> contents (meta, fonts, three.js CDN tag)
 src/styles.css       all CSS (dark UI; neon purple #b57bff, teal #2de2e6, green #4dff9a)
 src/template.html    all UI markup, cloned into <body> at startup
 src/app.js           all app logic (one IIFE, plain ES5-ish JS, no modules)
+src/tools.js         design tools (tape, clearances, paths, floors, roof, decor, costs, photo, video,
+                     notes, shopping). build.mjs splices it into app.js at /*@@TOOLS@@*/ (just
+                     before the render loop), so it shares app.js's scope. Several app.js functions
+                     call hooks defined here (planExtrasSVG, buildExtra, extraChecks, rimBands...).
+                     It must not contain the strings __HEAD__, __DEFAULT__ or a closing script tag.
 data/default-plan.json  the house as drafted from the sketch ("Reset to sketch" restores it)
 scripts/build.mjs    assembles dist/index.html; also used by dev.mjs and check.mjs
 reference/           original sketch photo + the 2D architectural plan (SVG/PNG)
@@ -55,8 +60,17 @@ walls:   { id, x1,y1, x2,y2, t, ext, h|null, note }        // centerline segment
 doors:   { id, name, type:'swing'|'barn', x1,y1 (hinge), x2,y2, swing:±1, h|null, note }
 windows: { id, name, x1,y1, x2,y2, sill, head, note }
 rooms:   { id, name, x,y, w,d, ceil|null, floor:'#hex', note }   // axis-aligned rects
-items:   { id, label, kind, cx,cy, w,d,h, rot (deg), color, note }
+items:   { id, label, kind, cx,cy, w,d,h, rot (deg), color, note, elev?, price?, link? }
+notes:   { id, x,y, h, lv (0|1), text, by, at, done }      // family pins
+floor2:  { elev, walls, doors, windows, rooms, items, fixtures }   // optional second floor
+specs.roof  { style:'none'|'gable'|'hip'|'flat', pitch, over, mat, color, gutters }
+specs.rates { floor:{matKey:$/sf}, paint:$/sf, build:$/sf }  specs.paint { coats, cover }
 ```
+
+Second floor: only the floor being edited lives in model.walls/doors/...; `model.onFloor2` marks
+that the arrays are swapped. `swapLevels()` flips them, `canonJSON()` gives the ground-first form
+for dirty checks, and `normalize()` unswaps on load. Stairs are an item (kind 'stairs') on the
+ground floor; `stairHoles()` cuts the opening upstairs and `walkFloorY()` ramps the walk camera.
 
 Rules the code relies on:
 - **Openings aren't stored on walls.** `wallOpenings(w)` finds every door/window whose endpoints lie
@@ -92,5 +106,5 @@ controls working (left-half joystick, right-half look, Door button).
 
 ## Ideas not yet built
 
-Multi-floor support, angled/curved rooms (rooms are rectangles today), measurement tool,
-lighting-fixture placement, material/texture library, PDF export of the plan with the room schedule.
+Angled/curved rooms (rooms are rectangles today), more than two floors, PDF export of the plan with
+the room schedule, real-time sync of family notes (today they travel with saved designs).
