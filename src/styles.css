@@ -176,7 +176,7 @@ table.cmp tr.room td:first-child{padding-left:10px}
 .dp-row{display:flex;gap:6px}
 @media (max-width:820px){.design-btn{max-width:130px}.design-pop{position:fixed;left:12px;right:12px;top:58px;width:auto}}
 
-.tabs button{font-size:13.5px}
+.tabs button{font-size:13px;white-space:nowrap;padding-left:2px;padding-right:2px}
 details.tg{border-bottom:1px solid var(--line);padding:4px 0 12px}
 details.tg>summary{list-style:none;cursor:pointer;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal);font-weight:600;padding:12px 0 6px;display:flex;align-items:center;gap:8px}
 details.tg>summary::-webkit-details-marker{display:none}
@@ -192,3 +192,17 @@ details.tg .row2 .btn{width:auto}
 .tape-l button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:0 0 0 2px;line-height:1}
 .tape-l button:hover{color:#fff}
 body.taping #view3d canvas{cursor:crosshair}
+.modal .card.wide{width:min(760px,100%)}
+.elev-box{background:#0f0c19;border:1px solid var(--line);border-radius:10px;padding:8px;overflow:auto}
+.fit-dims{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:6px;align-items:center;margin-top:8px}
+.fit-dims span{color:var(--muted)}
+.fit-sum{font-size:13px;margin:12px 0 6px}
+.fit-sum.ok{color:var(--green)}.fit-sum.no{color:#ff8fa3}
+.fit-sum span{color:var(--muted);font-size:11.5px}
+.fit-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.fit-list li{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 8px;border-radius:8px;background:#120f1d;border-left:3px solid var(--line)}
+.fit-list li.ok{border-left-color:var(--green)}
+.fit-list li span{flex:1}
+.fit-list li em{font-style:normal;font-size:11.5px;color:var(--muted)}
+.fit-list li.no{opacity:.6}
+.btn.mini{min-height:28px;padding:3px 10px;font-size:12px;width:auto!important}

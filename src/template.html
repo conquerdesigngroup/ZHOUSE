@@ -85,6 +85,18 @@
 <label class="tog"><input type="checkbox" id="tSwings"> Show every door swing</label>
 <p class="hint">Select a piece of furniture to see the space it needs (teal is clear, red is short) and how far it sits from everything around it. Hold <kbd>Alt</kbd> while dragging to move freely.</p>
 </details>
+<details class="tg" open><summary>Walkways &amp; access</summary>
+<label class="tog"><input type="checkbox" id="tPaths"> Walking paths from the front door</label>
+<label class="tog"><input type="checkbox" id="tAccess"> Wheelchair &amp; aging-in-place checks</label>
+<button class="btn" id="elevBtn" style="margin-top:6px">Wall elevation of the selected wall</button>
+<p class="hint">Paths show the way into every room; red dots mark spots under 36". With the accessibility checks on, the plan shows 5' turning circles and the Check tab adds door widths, grab-bar walls and more.</p>
+</details>
+<details class="tg"><summary>Will it fit?</summary>
+<div class="field"><label for="fitName">Name</label><div class="inp"><input type="text" id="fitName" placeholder="Grandma's hutch"></div></div>
+<div class="fit-dims"><input type="text" id="fitW" class="txt" inputmode="decimal" placeholder="Width 7'" aria-label="Width"><span>×</span><input type="text" id="fitD" class="txt" inputmode="decimal" placeholder="Depth 38&quot;" aria-label="Depth"><span>×</span><input type="text" id="fitH" class="txt" inputmode="decimal" placeholder="Height" aria-label="Height (optional)"></div>
+<button class="btn primary" id="fitBtn" style="margin-top:8px">Check every room</button>
+<div id="fitOut"></div>
+</details>
 </section>
 <section class="pane" data-pane="check">
 <div class="group"><div class="g-title">Design check</div>
@@ -147,6 +159,8 @@
 <tr><td><kbd>\</kbd></td><td>Toggle side panel</td></tr>
 </table>
 <div class="acts"><button class="btn" id="helpClose">Close</button></div></div></div>
+<div class="modal" id="elevDlg" hidden><div class="card wide"><h2 id="elevTitle">Wall elevation</h2><p class="muted" id="elevSub"></p><div id="elevBox" class="elev-box"></div>
+<div class="acts"><button class="btn" id="elevFlip">Other side</button><button class="btn" id="elevPrint">Print / PDF</button><button class="btn primary" id="elevClose">Close</button></div></div></div>
 <div class="modal" id="ioDlg" hidden><div class="card"><h2 id="ioTitle">Plan JSON</h2>
 <p class="muted" id="ioMsg"></p>
 <textarea id="ioText" spellcheck="false" aria-label="Plan JSON"></textarea>

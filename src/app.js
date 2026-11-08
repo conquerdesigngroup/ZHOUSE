@@ -475,7 +475,7 @@ function applyViewState(){var walk=view.mode==='walk';if(!house)return;
   ceilG.visible=walk||(view.ceilings&&view.cut>=0.999);vert.scale.y=walk?1:view.cut;sun.castShadow=view.shadows;
   document.body.classList.toggle('walk',walk);applyLighting();
   $('#mOrbit').classList.toggle('on',!walk);$('#mWalk').classList.toggle('on',walk);}
-function syncViewUI(){if(typeof syncSiteUI==='function')syncSiteUI();var S=model.specs;$('#ceilRange').value=S.ceiling;$('#ceilVal').textContent=fmt(S.ceiling);$('#tCeil').checked=view.ceilings;$('#tLabels').checked=view.labels;$('#tShadows').checked=view.shadows;
+function syncViewUI(){if(typeof syncSiteUI==='function')syncSiteUI();if(typeof TOGS!=='undefined')syncToolsUI();var S=model.specs;$('#ceilRange').value=S.ceiling;$('#ceilVal').textContent=fmt(S.ceiling);$('#tCeil').checked=view.ceilings;$('#tLabels').checked=view.labels;$('#tShadows').checked=view.shadows;
   $('#cutRange').value=view.cut;$('#cutVal').textContent=Math.round(view.cut*100)+'%';$('#eyeRange').value=S.eye;$('#eyeVal').textContent=fmt(S.eye);$('#spdRange').value=view.speed;$('#spdVal').textContent=view.speed+' ft/s';
   $('#snapSel').value=String(view.snap);$('#tIssues').checked=!!view.zones;$('#tDims').checked=view.dims!==false;$('#tElec').checked=view.elec!==false;$('#timeRange').value=view.time==null?15:view.time;$('#timeVal').textContent=fmtTime(view.time==null?15:view.time);$('#tLights').checked=!!view.lightsOn;$('#projName').textContent=S.name||'Residence';document.title=(S.name||'Residence')+' · 3D Walkthrough';}
 
@@ -847,9 +847,10 @@ function renderInspector(){var box=$('#inspector'),o=getObj();
   var acts='';
   if(sel.type==='door'){var st=doorState[o.id]||{target:0};acts+='<button class="btn" data-act="toggle">'+(st.target>0.5?'Close':'Open')+' door</button><button class="btn" data-act="hinge">Flip hinge side</button><button class="btn" data-act="swing">Flip swing side</button>';}
   if(sel.type==='item')acts+='<button class="btn" data-act="rot90">Rotate 90°</button>';
+  acts+=inspectorExtras(o);
   if(sel.type==='wall')acts+='<button class="btn" data-act="adddoor">Add door here</button><button class="btn" data-act="addwin">Add window here</button>';
   acts+='<button class="btn" data-act="dup">Duplicate</button><button class="btn danger" data-act="del">Delete</button>';
-  box.innerHTML=html+'<div class="insp-actions">'+acts+'</div>';
+  box.innerHTML=html+'<div class="insp-actions">'+acts+'</div>';wireInspectorExtras(box);
   $$('[data-i]',box).forEach(function(el){var f=FIELDS[sel.type][+el.dataset.i];var ev=(f.kind==='color')?'input':'change';var snap=null;
     el.addEventListener('focus',function(){snap=JSON.stringify(model);el._pushed=false;});
     el.addEventListener(ev,function(){var o2=getObj();if(!o2)return;var before=snap||JSON.stringify(model),v;
@@ -1376,6 +1377,7 @@ function runChecks(){var key=JSON.stringify(model);if(CK.memo===key)return CK.li
       if(r&&/kitchen|bath|wc|laundry|garage|mud/i.test(r.name)&&f.kind==='outlet')add('warn','gfci',[ref('fixture',f)],'Outlet in '+r.name+' should be GFCI','Kitchens, baths, laundry, garages and wet areas need GFCI protection.',[[f.x-0.5,f.y-0.5],[f.x+0.5,f.y-0.5],[f.x+0.5,f.y+0.5],[f.x-0.5,f.y+0.5]]);});}
   items.forEach(function(it){if(!roomAt(it.cx,it.cy))add('tip','outside',[ref('item',it)],iName(it)+' is outside every room','It may be left over from an edit, or a room is missing around it.',polys[it.id]);});
 
+  extraChecks(add,ref,items,polys);
   var ign={};(model.checkIgnore||[]).forEach(function(k){ign[k]=1;});out.forEach(function(o){o.ignored=!!ign[o.key];});
   var rank={err:0,warn:1,tip:2};out.sort(function(p,q){return (p.ignored-q.ignored)||(rank[p.sev]-rank[q.sev]);});
   CK.memo=key;CK.list=out;return out;}
