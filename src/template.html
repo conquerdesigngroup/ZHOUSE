@@ -110,6 +110,17 @@
 <label class="tog"><input type="checkbox" id="tRoof"> Show the roof (hides it inside walk mode)</label>
 </div>
 </details>
+<details class="tg" id="notesTg"><summary>Notes from family</summary>
+<div class="field"><label for="noteBy">Your name</label><div class="inp"><input type="text" id="noteBy" placeholder="Mom, Dad, Sam…"></div></div>
+<button class="btn primary" data-noteadd style="margin-top:8px;width:100%">Add a note</button>
+<div id="notesList" class="notes-list"></div>
+<p class="hint">Pin a note anywhere in the plan or the 3D view: "move this window", "bigger closet?". Notes save with the design, so everyone who opens it sees them.</p>
+</details>
+<details class="tg"><summary>Photos, video &amp; shopping</summary>
+<div class="row2"><button class="btn" id="photoBtn">Take a photo</button><button class="btn" id="tourBtn">Day-to-night video</button></div>
+<button class="btn" id="shopBtn" style="margin-top:8px;width:100%">Shopping list</button>
+<p class="hint">Photos render the current view at up to 3× with depth of field. The video circles the house from morning to night (16 seconds). The shopping list and the cost estimate in Specs use the prices you add.</p>
+</details>
 </section>
 <section class="pane" data-pane="check">
 <div class="group"><div class="g-title">Design check</div>
@@ -175,6 +186,7 @@
 <div class="acts"><button class="btn" id="helpClose">Close</button></div></div></div>
 <div class="modal" id="elevDlg" hidden><div class="card wide"><h2 id="elevTitle">Wall elevation</h2><p class="muted" id="elevSub"></p><div id="elevBox" class="elev-box"></div>
 <div class="acts"><button class="btn" id="elevFlip">Other side</button><button class="btn" id="elevPrint">Print / PDF</button><button class="btn primary" id="elevClose">Close</button></div></div></div>
+<div class="modal" id="xDlg" hidden><div class="card wide"><h2 id="xTitle"></h2><div id="xBody"></div><div class="acts" id="xActs"></div></div></div>
 <div class="modal" id="ioDlg" hidden><div class="card"><h2 id="ioTitle">Plan JSON</h2>
 <p class="muted" id="ioMsg"></p>
 <textarea id="ioText" spellcheck="false" aria-label="Plan JSON"></textarea>

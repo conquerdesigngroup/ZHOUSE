@@ -566,3 +566,153 @@ function lampLights(pl,lit){model.items.forEach(function(it){if(it.kind!=='lamp'
 function lampGlow(on){lampShades.forEach(function(m){m.emissiveIntensity=on?1.2:0.05;});}
 (function(){var cs=$('#catStyle');if(!cs)return;cs.onchange=function(){catStyle=cs.value;renderCatalog();};})();
 renderCatalog();
+
+/* ---------- shared pop-up for photos, videos and the shopping list ---------- */
+function xOpen(title,body,acts){$('#xTitle').textContent=title;$('#xBody').innerHTML=body;var a=$('#xActs');a.innerHTML='';(acts||[]).concat([['Close',function(){xClose();},'primary']]).forEach(function(b){var el=document.createElement('button');el.className='btn'+(b[2]?' '+b[2]:'');el.textContent=b[0];el.onclick=b[1];a.appendChild(el);});$('#xDlg').hidden=false;}
+function xClose(){$('#xDlg').hidden=true;$('#xBody').innerHTML='';}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#xDlg').hidden){xClose();e.stopImmediatePropagation();}},true);
+function download(name,blobOrUrl){var a=document.createElement('a');a.href=typeof blobOrUrl==='string'?blobOrUrl:URL.createObjectURL(blobOrUrl);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},100);}
+function fileBase(){return (model.specs.name||'house').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').toLowerCase()||'house';}
+function money(v){return '$'+Math.round(v).toLocaleString('en-US');}
+
+/* ---------- cost estimate per room (Specs tab) ---------- */
+var FLOOR_RATE={solid:5,wood:9,lvp:5,herring:14,hex:12,marble:22,concrete:6,carpet:4,epoxy:5};
+function rateSpec(){var R=model.specs.rates||{};return {floor:Object.assign({},FLOOR_RATE,R.floor||{}),paint:R.paint!=null?R.paint:2.5,build:R.build!=null?R.build:225};}
+function itemsInRoom(r){return model.items.filter(function(it){return it.cx>=r.x&&it.cx<=r.x+r.w&&it.cy>=r.y&&it.cy<=r.y+r.d;});}
+function costHTML(){var R=rateSpec(),T={f:0,p:0,i:0},area=0,noPrice=0,used={};
+  var rows=model.rooms.map(function(r){var A=roomAreas(r),fm=r.floorMat||'solid';used[fm]=1;if(R.floor[fm]==null)R.floor[fm]=8;var f=A.floor*1.1*R.floor[fm],p=(A.wall+A.ceil)*R.paint,i=0;area+=A.floor;
+    itemsInRoom(r).forEach(function(it){if(it.price>0)i+=+it.price;else if(it.kind!=='person'&&it.kind!=='stairs')noPrice++;});T.f+=f;T.p+=p;T.i+=i;
+    return '<tr><td>'+esc(r.name)+'</td><td>'+money(f)+'</td><td>'+money(p)+'</td><td>'+(i?money(i):'–')+'</td><td><b>'+money(f+p+i)+'</b></td></tr>';}).join('');
+  var lvl=model.floor2?(model.onFloor2?' (second floor)':' (ground floor)'):'';
+  return '<div class="group"><div class="g-title">Cost estimate'+lvl+'</div><table class="sched cost"><thead><tr><th>Room</th><th>Floor</th><th>Paint</th><th>Furniture</th><th>Total</th></tr></thead><tbody>'+rows+
+    '</tbody><tfoot><tr><td>Total</td><td>'+money(T.f)+'</td><td>'+money(T.p)+'</td><td>'+money(T.i)+'</td><td><b>'+money(T.f+T.p+T.i)+'</b></td></tr></tfoot></table>'+
+    '<p class="hint">Building the house itself at <b>'+money(R.build)+'</b> a sq ft comes to about <b>'+money(R.build*area)+'</b> for '+Math.round(area).toLocaleString('en-US')+' sq ft'+(lvl?' on this floor':'')+'.'+(noPrice?' '+noPrice+' pieces of furniture have no price yet; add one in the Edit tab or the shopping list.':'')+'</p>'+
+    '<details class="tg rates"><summary>Change the prices used</summary>'+
+    Object.keys(used).map(function(k){return '<div class="row"><span class="lbl">'+esc(MAT_NAME[k]||k)+'</span><input class="txt" type="number" min="0" step="0.5" data-rate="'+k+'" value="'+R.floor[k]+'"><span class="unit">$/sf</span></div>';}).join('')+
+    '<div class="row"><span class="lbl">Painting</span><input class="txt" type="number" min="0" step="0.25" data-rate="paint" value="'+R.paint+'"><span class="unit">$/sf</span></div>'+
+    '<div class="row"><span class="lbl">Build cost</span><input class="txt" type="number" min="0" step="5" data-rate="build" value="'+R.build+'"><span class="unit">$/sf</span></div>'+
+    '<p class="hint">Flooring includes 10% waste and installation. Painting covers walls and ceilings, labor and paint.</p></details>'+
+    '<button class="btn" data-shop style="margin-top:8px;width:100%">Shopping list</button></div>';}
+function wireCost(box){$$('[data-rate]',box).forEach(function(inp){inp.onchange=function(){var v=Math.max(0,+inp.value||0),R=model.specs.rates=model.specs.rates||{};pushUndo();if(inp.dataset.rate==='paint'||inp.dataset.rate==='build')R[inp.dataset.rate]=v;else{R.floor=R.floor||{};R.floor[inp.dataset.rate]=v;}afterChange();};});
+  $$('[data-shop]',box).forEach(function(b){b.onclick=openShopping;});}
+var _specsX=specsExtrasHTML,_wireSX=wireSpecsExtras;
+specsExtrasHTML=function(){return _specsX()+costHTML();};
+wireSpecsExtras=function(box){_wireSX(box);wireCost(box);};
+
+/* ---------- shopping list with sizes and links ---------- */
+var BUILTIN=['counter','island','cabinet','shelf','stairs','person','tub','shower'];
+function bothLevels(){var L=[{lv:model.onFloor2?1:0,items:model.items,rooms:model.rooms}];if(model.floor2){var o=model.onFloor2?groundItems():model.floor2.items,orooms=model.onFloor2?model.floor2.rooms:model.floor2.rooms;L.push({lv:model.onFloor2?0:1,items:o||[],rooms:orooms||[]});}return L;}
+function shopRows(withBuilt){var g={},order=[];bothLevels().forEach(function(L){L.items.forEach(function(it){if(!withBuilt&&BUILTIN.indexOf(it.kind)>=0)return;if(it.kind==='person'||it.kind==='stairs')return;
+    var r=null;L.rooms.forEach(function(q){if(!r&&it.cx>=q.x&&it.cx<=q.x+q.w&&it.cy>=q.y&&it.cy<=q.y+q.d)r=q;});
+    var key=[iName(it),r3(it.w),r3(it.d),r3(it.h),it.link||''].join('|');if(!g[key]){g[key]={name:iName(it),w:it.w,d:it.d,h:it.h,qty:0,price:0,priced:0,link:it.link||'',rooms:[],ids:[],kind:it.kind};order.push(key);}
+    var G=g[key];G.qty++;G.ids.push(it.id);if(it.price>0){G.price=+it.price;G.priced++;}var rn=r?r.name:'Outside';if(G.rooms.indexOf(rn)<0)G.rooms.push(rn);});});
+  return order.map(function(k){return g[k];});}
+function sizeStr(G){return fmt(G.w)+' W × '+fmt(G.d)+' D × '+fmt(G.h)+' H';}
+function findUrl(G){return 'https://www.google.com/search?tbm=shop&q='+encodeURIComponent(G.name+' '+inchStr(G.w)+' wide');}
+var shopBuilt=false;
+function openShopping(){var rows=shopRows(shopBuilt),tot=0,miss=0;
+  var body='<p class="muted">Everything in the design'+(model.floor2?' on both floors':'')+', grouped when the same piece appears more than once. Type a price to fill it in for every one of them.</p>'+
+    '<label class="tog"><input type="checkbox" id="shopBuilt"'+(shopBuilt?' checked':'')+'> Include built-ins (counters, cabinets, shelving, tubs)</label>'+
+    '<div class="shop-wrap"><table class="shop"><thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Each</th><th>Total</th><th></th></tr></thead><tbody>'+
+    rows.map(function(G,i){var t=G.price*G.qty;tot+=t;if(!G.price)miss++;return '<tr><td><b>'+esc(G.name)+'</b><span>'+esc(G.rooms.join(', '))+'</span></td><td class="mono">'+esc(sizeStr(G))+'</td><td>'+G.qty+'</td>'+
+      '<td><input class="txt" type="number" min="0" step="1" data-sp="'+i+'" value="'+(G.price||'')+'" placeholder="$"></td><td>'+(t?money(t):'–')+'</td>'+
+      '<td>'+(G.link?'<a href="'+esc(G.link)+'" target="_blank" rel="noopener">Open link</a>':'<a href="'+esc(findUrl(G))+'" target="_blank" rel="noopener">Find it</a>')+'</td></tr>';}).join('')+
+    '</tbody><tfoot><tr><td colspan="4">Total'+(miss?' ('+miss+' without a price)':'')+'</td><td><b>'+money(tot)+'</b></td><td></td></tr></tfoot></table></div>';
+  xOpen('Shopping list',body,[['Download CSV',function(){shopCSV(rows);}],['Print / PDF',function(){shopPrint(rows,tot);}]]);
+  $('#shopBuilt').onchange=function(e){shopBuilt=e.target.checked;openShopping();};
+  $$('[data-sp]').forEach(function(inp){inp.onchange=function(){var G=rows[+inp.dataset.sp],v=Math.max(0,+inp.value||0);pushUndo();
+    bothLevels().forEach(function(L){L.items.forEach(function(it){if(G.ids.indexOf(it.id)>=0){if(v)it.price=v;else delete it.price;}});});afterChange();openShopping();};});}
+function csvCell(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function shopCSV(rows){var L=[['Item','Rooms','Width','Depth','Height','Qty','Price each','Total','Link']];rows.forEach(function(G){L.push([G.name,G.rooms.join('; '),fmt(G.w),fmt(G.d),fmt(G.h),G.qty,G.price||'',G.price?G.price*G.qty:'',G.link||findUrl(G)]);});
+  download(fileBase()+'-shopping-list.csv',new Blob([L.map(function(r){return r.map(csvCell).join(',');}).join('\n')],{type:'text/csv'}));}
+function shopPrint(rows,tot){var w=window.open('','_blank');if(!w){toast('Allow pop-ups to print the list.');return;}
+  w.document.write('<!doctype html><title>Shopping list</title><style>body{font:14px system-ui,sans-serif;margin:32px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:7px 6px;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;color:#666}small{color:#666;display:block}a{color:#2850c8}</style>'+
+    '<h1>'+esc(model.specs.name||'Residence')+': shopping list</h1><table><tr><th>Item</th><th>Size</th><th>Qty</th><th>Each</th><th>Total</th></tr>'+rows.map(function(G){return '<tr><td>'+esc(G.name)+'<small>'+esc(G.rooms.join(', '))+(G.link?' · <a href="'+esc(G.link)+'">'+esc(G.link)+'</a>':'')+'</small></td><td>'+esc(sizeStr(G))+'</td><td>'+G.qty+'</td><td>'+(G.price?money(G.price):'')+'</td><td>'+(G.price?money(G.price*G.qty):'')+'</td></tr>';}).join('')+
+    '<tr><td colspan="4"><b>Total</b></td><td><b>'+money(tot)+'</b></td></tr></table>');w.document.close();setTimeout(function(){w.print();},300);}
+
+/* ---------- photo mode: bigger render, sharper shadows, depth of field ---------- */
+var PH={scale:2,dof:1,sharp:true,focus:null,shot:null};
+function blurCopy(src,f){var w=src.width,h=src.height,a=document.createElement('canvas');a.width=Math.max(1,Math.round(w/f));a.height=Math.max(1,Math.round(h/f));var g=a.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(src,0,0,a.width,a.height);
+  var b=document.createElement('canvas');b.width=w;b.height=h;var g2=b.getContext('2d');g2.imageSmoothingQuality='high';g2.drawImage(a,0,0,w,h);return g2.getImageData(0,0,w,h).data;}
+function shootPhoto(){var W=host.clientWidth||1,H=host.clientHeight||1,pr=renderer.getPixelRatio(),hid=[helpG,tapeG,issueG].filter(function(o){return o&&o.visible;});hid.forEach(function(o){o.visible=false;});
+  var ms=sun.shadow.mapSize.x;if(PH.sharp){if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}sun.shadow.mapSize.set(4096,4096);}
+  renderer.setPixelRatio(PH.scale);renderer.setSize(W,H,false);renderer.render(scene,camera);
+  var w=cv.width,h=cv.height,col=document.createElement('canvas');col.width=w;col.height=h;col.getContext('2d').drawImage(cv,0,0);var depth=null;
+  try{var rt=new THREE.WebGLRenderTarget(w,h),bg=scene.background,fog=scene.fog,dm=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});scene.background=null;scene.fog=null;scene.overrideMaterial=dm;
+    var cc=renderer.getClearColor(new THREE.Color()),ca=renderer.getClearAlpha();renderer.setClearColor(0xffffff,1);renderer.setRenderTarget(rt);renderer.render(scene,camera);depth=new Uint8Array(w*h*4);renderer.readRenderTargetPixels(rt,0,0,w,h,depth);
+    renderer.setRenderTarget(null);renderer.setClearColor(cc,ca);scene.overrideMaterial=null;scene.background=bg;scene.fog=fog;dm.dispose();rt.dispose();}catch(err){depth=null;scene.overrideMaterial=null;renderer.setRenderTarget(null);}
+  if(PH.sharp){if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}sun.shadow.mapSize.set(ms,ms);}
+  renderer.setPixelRatio(pr);resize();hid.forEach(function(o){o.visible=true;});
+  var dist=null;if(depth){dist=new Float32Array(w*h);var n=camera.near,f=camera.far;for(var y=0;y<h;y++)for(var x=0;x<w;x++){var i=((h-1-y)*w+x)*4,d=(depth[i]/16777216+depth[i+1]/65536+depth[i+2]/256+depth[i+3])/255;d*=255/256;dist[y*w+x]=d>=0.9999?1e4:(n*f)/(f-(f-n)*d);}}
+  PH.shot={w:w,h:h,col:col,dist:dist,levels:null};if(!PH.focus)PH.focus=[0.5,0.5];return composePhoto();}
+function composePhoto(){var S=PH.shot,w=S.w,h=S.h,out=document.createElement('canvas');out.width=w;out.height=h;var g=out.getContext('2d');
+  if(!PH.dof||!S.dist){g.drawImage(S.col,0,0);return out;}
+  if(!S.levels){var s0=S.col.getContext('2d').getImageData(0,0,w,h).data;S.levels=[s0,blurCopy(S.col,2.2*PH.scale),blurCopy(S.col,4.5*PH.scale),blurCopy(S.col,9*PH.scale)];}
+  var fx=clamp(Math.round(PH.focus[0]*w),0,w-1),fy=clamp(Math.round(PH.focus[1]*h),0,h-1),fd=S.dist[fy*w+fx];if(fd>=1e4)fd=60;
+  var img=g.createImageData(w,h),o=img.data,L=S.levels,k=PH.dof===2?6:3;
+  for(var p=0,q=0;p<w*h;p++,q+=4){var c=Math.min(3,Math.abs(S.dist[p]-fd)/fd*k),a=c|0,t=c-a,A=L[a],B=L[Math.min(3,a+1)];o[q]=A[q]+(B[q]-A[q])*t;o[q+1]=A[q+1]+(B[q+1]-A[q+1])*t;o[q+2]=A[q+2]+(B[q+2]-A[q+2])*t;o[q+3]=255;}
+  g.putImageData(img,0,0);return out;}
+function openPhoto(){if(rebuildQueued){rebuildQueued=false;rebuild();}toast('Rendering your photo…',1500);setTimeout(function(){var c=shootPhoto();showPhoto(c);},40);}
+function showPhoto(c){var url=c.toDataURL('image/png');
+  xOpen('Photo','<div class="photo-box"><img id="phImg" src="'+url+'" alt="Rendered photo of the design"><i id="phFocus"></i></div>'+
+    '<div class="photo-opts"><label>Size <select id="phScale"><option value="1">Screen</option><option value="2">2× (sharp)</option><option value="3">3× (print)</option></select></label>'+
+    '<label>Depth of field <select id="phDof"><option value="0">Off</option><option value="1">Soft</option><option value="2">Strong</option></select></label>'+
+    '<label class="tog"><input type="checkbox" id="phSharp"> Crisp shadows</label></div><p class="hint">Click the photo to choose what stays in focus. Line up the view first with orbit or walk mode, then take the photo again.</p>',
+    [['Download PNG',function(){download(fileBase()+'-photo.png',$('#phImg').src);}]]);
+  $('#phScale').value=String(PH.scale);$('#phDof').value=String(PH.dof);$('#phSharp').checked=PH.sharp;
+  var mark=function(){var f=$('#phFocus');if(!f)return;f.style.left=(PH.focus[0]*100)+'%';f.style.top=(PH.focus[1]*100)+'%';f.style.display=PH.dof?'':'none';};mark();
+  var retake=function(){PH.scale=+$('#phScale').value;PH.dof=+$('#phDof').value;PH.sharp=$('#phSharp').checked;xClose();openPhoto();};
+  $('#phScale').onchange=retake;$('#phSharp').onchange=retake;$('#phDof').onchange=function(){PH.dof=+$('#phDof').value;$('#phImg').src=composePhoto().toDataURL('image/png');mark();};
+  $('#phImg').onclick=function(e){var r=e.target.getBoundingClientRect();PH.focus=[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];if(!PH.dof){PH.dof=1;$('#phDof').value='1';}$('#phImg').src=composePhoto().toDataURL('image/png');mark();};}
+
+/* ---------- day-to-night video ---------- */
+var tour=null,recBadge=document.createElement('div');recBadge.id='recBadge';recBadge.hidden=true;host.appendChild(recBadge);
+function startTour(){if(tour)return stopTour();if(typeof MediaRecorder==='undefined'||!cv.captureStream){toast('This browser can’t record video. Try Chrome, Edge or Safari 15+.');return;}
+  if(view.mode==='walk')setMode('orbit');var types=['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'],mime=types.filter(function(t){return MediaRecorder.isTypeSupported(t);})[0]||'';
+  var st=cv.captureStream(30),rec;try{rec=new MediaRecorder(st,mime?{mimeType:mime,videoBitsPerSecond:8e6}:{});}catch(e){toast('Could not start recording: '+e.message);return;}
+  tour={t:0,dur:16,rec:rec,chunks:[],mime:mime||'video/webm',keep:{time:view.time,lights:view.lightsOn,theta:orbit.theta}};rec.ondataavailable=function(e){if(e.data&&e.data.size)tour.chunks.push(e.data);};
+  rec.onstop=function(){var T=tour;tour=null;recBadge.hidden=true;view.time=T.keep.time;view.lightsOn=T.keep.lights;applyLighting();syncViewUI();if(T.cancel)return;
+    var blob=new Blob(T.chunks,{type:T.mime}),ext=/mp4/.test(T.mime)?'mp4':'webm',url=URL.createObjectURL(blob);
+    xOpen('Day to night','<video src="'+url+'" controls autoplay loop playsinline class="tour-vid"></video><p class="hint">'+Math.round(blob.size/1e5)/10+' MB '+ext.toUpperCase()+'. The camera circles the house while the sun goes down and the lights come on.</p>',[['Download video',function(){download(fileBase()+'-day-to-night.'+ext,blob);}]]);};
+  rec.start(500);recBadge.hidden=false;recBadge.innerHTML='<span class="dot"></span><b>Recording</b> <span id="recT">0s</span><button class="btn mini" id="recStop">Stop</button>';$('#recStop').onclick=function(){stopTour(true);};}
+function stopTour(cancel){if(!tour)return;if(cancel)tour.cancel=true;if(tour.rec.state!=='inactive')tour.rec.stop();}
+function tourFrame(dt){if(!tour||tour.stopping)return;if(!tour.t0)tour.t0=performance.now();tour.t=(performance.now()-tour.t0)/1000;var f=Math.min(1,tour.t/tour.dur),e=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2;
+  view.time=7+15*e;view.lightsOn=view.time>=17;orbit.theta=tour.keep.theta+e*Math.PI*0.9;applyLighting();var rt=$('#recT');if(rt)rt.textContent=Math.ceil(tour.dur-tour.t)+'s left';
+  if(f>=1){tour.stopping=true;setTimeout(function(){if(tour)tour.rec.stop();},300);}}
+
+/* ---------- notes and pins from the family ---------- */
+var notePlacing=false,noteBox=document.createElement('div');noteBox.id='noteLabels';host.appendChild(noteBox);
+function noteAuthor(){return lsGet('house3d-author')||'';}
+function notes(){return model.notes||[];}
+function noteLv(){return model.onFloor2?1:0;}
+function setNotePlacing(on){notePlacing=on;document.body.classList.toggle('noting',on);$$('[data-noteadd]').forEach(function(b){b.classList.toggle('on',on);});if(on)toast('Click in the plan or the 3D view where the note goes. Esc to cancel.',3800);}
+function addNoteAt(x,y,hgt){var n={id:'n'+Date.now().toString(36)+Math.floor(Math.random()*1e4),x:r3(x),y:r3(y),h:r3(hgt==null?4:hgt),lv:noteLv(),text:'',by:noteAuthor(),at:new Date().toISOString().slice(0,10),done:false};pushUndo();(model.notes=model.notes||[]).push(n);setNotePlacing(false);afterChange();
+  showTab('tools');var d=$('#notesTg');if(d)d.open=true;renderNotes();var t=$('[data-ntext="'+n.id+'"]');if(t){t.focus();t.scrollIntoView({block:'center'});}}
+function noteNum(n){return notes().indexOf(n)+1;}
+function notesSVG(k){var h=[];notes().forEach(function(n,i){if((n.lv||0)!==noteLv())return;var r=9*k,op=n.done?0.45:1;
+  h.push('<g data-note="'+n.id+'" style="cursor:pointer" opacity="'+op+'"><circle cx="'+n.x+'" cy="'+n.y+'" r="'+r.toFixed(3)+'" fill="#ffd84d" stroke="#0c0a14" stroke-width="'+(2*k).toFixed(3)+'"/><text x="'+n.x+'" y="'+n.y+'" font-size="'+(10.5*k).toFixed(2)+'" text-anchor="middle" dominant-baseline="central" fill="#0c0a14" font-weight="700" font-family="Space Grotesk, sans-serif" pointer-events="none">'+(i+1)+'</text></g>');});return h.join('');}
+var _pex=planExtrasSVG;planExtrasSVG=function(k){return _pex(k)+notesSVG(k);};
+svg.addEventListener('pointerdown',function(e){var t=e.target.closest&&e.target.closest('[data-note]');
+  if(notePlacing&&e.button===0){e.stopImmediatePropagation();e.preventDefault();var p=toPlan(e);addNoteAt(p.x,p.y);return;}
+  if(t&&e.button===0){e.stopImmediatePropagation();e.preventDefault();focusNote(t.getAttribute('data-note'));}},true);
+function noteClick3d(e){if(!notePlacing||view.mode!=='orbit')return false;var p=pickPoint(e.clientX,e.clientY);if(!p)return true;var E=activeElev();addNoteAt(p.x,p.z,Math.max(0.5,p.y-E+0.4));return true;}
+function focusNote(id){showTab('tools');var d=$('#notesTg');if(d)d.open=true;renderNotes();var c=$('[data-ncard="'+id+'"]');if(c){c.scrollIntoView({block:'center'});c.classList.add('flash');setTimeout(function(){c.classList.remove('flash');},900);}}
+function renderNotes(){var box=$('#notesList');if(!box)return;if(box.contains(document.activeElement)&&box._n===notes().length){drawNotes3D();return;}box._n=notes().length;var N=notes(),me=$('#noteBy');if(me&&document.activeElement!==me)me.value=noteAuthor();
+  box.innerHTML=N.length?N.map(function(n,i){var other=(n.lv||0)!==noteLv();return '<div class="note-card'+(n.done?' done':'')+'" data-ncard="'+n.id+'"><div class="nh"><span class="nb">'+(i+1)+'</span><span class="nm">'+esc(n.by||'Someone')+' · '+esc(n.at||'')+(model.floor2?' · '+(n.lv?'2nd':'1st')+' floor':'')+'</span>'+
+    '<label class="nd"><input type="checkbox" data-ndone="'+n.id+'"'+(n.done?' checked':'')+'> Done</label></div><textarea data-ntext="'+n.id+'" rows="2" placeholder="What should we change here?">'+esc(n.text||'')+'</textarea>'+
+    '<div class="na"><button class="btn mini" data-ngo="'+n.id+'"'+(other?' disabled title="On the other floor"':'')+'>Show</button><button class="btn mini danger" data-ndel="'+n.id+'">Delete</button></div></div>';}).join(''):'<p class="hint">No notes yet.</p>';
+  var get=function(id){return N.filter(function(n){return n.id===id;})[0];};
+  $$('[data-ntext]',box).forEach(function(t){t.onchange=function(){var n=get(t.dataset.ntext);if(!n||n.text===t.value)return;pushUndo();n.text=t.value;afterChange();};});
+  $$('[data-ndone]',box).forEach(function(c){c.onchange=function(){var n=get(c.dataset.ndone);pushUndo();n.done=c.checked;afterChange();};});
+  $$('[data-ndel]',box).forEach(function(b){b.onclick=function(){pushUndo();model.notes=N.filter(function(n){return n.id!==b.dataset.ndel;});afterChange();};});
+  $$('[data-ngo]',box).forEach(function(b){b.onclick=function(){var n=get(b.dataset.ngo);if(view.mode==='walk')setMode('orbit');tween={t0:performance.now(),dur:650,from:{tx:orbit.tx,tz:orbit.tz,r:orbit.r,theta:orbit.theta,phi:orbit.phi},to:{tx:n.x,tz:n.y,r:Math.min(orbit.r,32),theta:orbit.theta,phi:Math.min(orbit.phi,0.95)}};};});
+  drawNotes3D();}
+function drawNotes3D(){noteBox.innerHTML='';notes().forEach(function(n,i){if(n.done)return;var el=document.createElement('button');el.className='note-pin';el.innerHTML='<b>'+(i+1)+'</b>'+(n.text?'<span>'+esc(n.text.length>42?n.text.slice(0,40)+'…':n.text)+'</span>':'');
+  el._p=new THREE.Vector3(n.x,(n.lv?floor2Elev():0)+(n.h||4),n.y);el._lv=n.lv||0;el.onclick=function(){focusNote(n.id);};noteBox.appendChild(el);});}
+function updateNoteLabels(){if(!noteBox.children.length)return;var W=host.clientWidth,H=host.clientHeight,walk=view.mode==='walk';Array.prototype.forEach.call(noteBox.children,function(el){
+  if(!walk&&el._lv>noteLv()&&!TV.roof){el.style.display='none';return;}v3.copy(el._p).project(camera);if(v3.z>1||v3.z<-1){el.style.display='none';return;}el.style.display='';el.style.left=((v3.x+1)/2*W)+'px';el.style.top=((1-v3.y)/2*H)+'px';});}
+(function(){var a=$('[data-noteadd]');if(a)a.onclick=function(){setNotePlacing(!notePlacing);};var by=$('#noteBy');if(by)by.onchange=function(){lsSet('house3d-author',by.value.trim());};
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&notePlacing){setNotePlacing(false);e.stopImmediatePropagation();}},true);
+  var p=$('#photoBtn');if(p)p.onclick=openPhoto;var v=$('#tourBtn');if(v)v.onclick=startTour;var s=$('#shopBtn');if(s)s.onclick=openShopping;})();
+var _tf=toolsFrame;toolsFrame=function(dt){_tf(dt);tourFrame(dt);updateNoteLabels();};
+var _sync=syncToolsUI;syncToolsUI=function(){_sync();renderNotes();};
