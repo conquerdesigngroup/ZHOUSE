@@ -5,13 +5,20 @@
 <div class="seg" role="group" aria-label="Camera mode"><button id="mOrbit" class="on">Orbit<kbd>O</kbd></button><button id="mWalk">Walk<kbd>F</kbd></button></div>
 <div class="seg" role="group" aria-label="Camera angle"><button data-view="top">Top<kbd>1</kbd></button><button data-view="ne">NE<kbd>2</kbd></button><button data-view="nw">NW<kbd>3</kbd></button><button data-view="se">SE<kbd>4</kbd></button><button data-view="sw">SW<kbd>5</kbd></button><button data-view="front">Front<kbd>6</kbd></button><button data-view="side">Side<kbd>7</kbd></button></div>
 <button id="editToggle" class="btn">Plan editor<kbd>P</kbd></button>
+<button class="btn" data-tape title="Tape measure: click two points in 3D (T)">Tape<kbd>T</kbd></button>
 <div class="spacer"></div>
+<div class="design-wrap"><button id="designBtn" class="btn design-btn" aria-haspopup="true" aria-expanded="false" title="Saved designs: switch, save as new, rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="designName">Main plan</span><span class="caret">&#9662;</span></button>
+<div id="designPop" class="design-pop" hidden role="dialog" aria-label="Saved designs">
+<div class="dp-title">Your designs</div><div id="dpList" class="dp-list"></div>
+<div class="dp-sec"><label for="dpNewName">Save a copy as a new design</label><div class="dp-row"><input id="dpNewName" type="text" class="txt" maxlength="60" placeholder="Bigger kitchen"><button class="btn primary" id="dpNewBtn">Save as new</button></div></div>
+<div class="dp-sec"><label for="dpRename">Rename this design</label><div class="dp-row"><input id="dpRename" type="text" class="txt" maxlength="60"><button class="btn" id="dpRenameBtn">Rename</button></div></div>
+<p id="dpNote" class="hint"></p></div></div>
 <span id="saveState" class="save-state">Saved</span>
 <button id="saveBtn" class="btn primary" disabled>Save</button>
 <button id="helpBtn" class="icon-btn" aria-label="Keyboard shortcuts" title="Shortcuts (H)">?</button>
 </header>
 <aside id="side">
-<div class="tabs" role="tablist"><button data-tab="view" class="on">View</button><button data-tab="edit">Edit</button><button data-tab="specs">Specs</button><button data-tab="check">Check <span id="ckCount" class="ck-count"></span></button></div>
+<div class="tabs" role="tablist"><button data-tab="view" class="on">View</button><button data-tab="edit">Edit</button><button data-tab="tools">Tools</button><button data-tab="specs">Specs</button><button data-tab="check">Check <span id="ckCount" class="ck-count"></span></button></div>
 <section class="pane on" data-pane="view">
 <div class="group"><div class="g-title">Ceiling height</div>
 <div class="row"><input type="range" id="ceilRange" min="7" max="16" step="0.25" aria-label="Ceiling height"><span id="ceilVal" class="val"></span></div>
@@ -26,6 +33,13 @@
 <div class="row"><span class="lbl">Time of day</span><input type="range" id="timeRange" min="5" max="21" step="0.25" value="15" aria-label="Time of day"><span id="timeVal" class="val">3:00 PM</span></div>
 <label class="tog"><input type="checkbox" id="tLights"> Interior lights on<kbd>I</kbd></label>
 <p class="hint">The sun follows a north-up plan: morning light from the east, afternoon from the west. Lights use the fixtures you place in Edit → Electrical, plus a soft light in any room that has none.</p></div>
+<div class="group"><div class="g-title">Outdoors</div>
+<div class="row"><span class="lbl">Ground</span><select id="siteGround" aria-label="Ground" style="flex:1;min-width:0"></select></div>
+<div class="row"><span class="lbl">Sky</span><select id="siteSky" aria-label="Sky" style="flex:1;min-width:0"><option value="day">Clear day</option><option value="sunset">Sunset</option><option value="overcast">Overcast</option><option value="night">Night</option><option value="studio">Dark studio</option></select></div>
+<div class="row"><span class="lbl">Trees</span><select id="siteTrees" aria-label="Trees" style="flex:1;min-width:0"><option value="none">None</option><option value="some">A few</option><option value="lots">Lots</option></select></div>
+<label class="tog"><input type="checkbox" id="siteFence"> Wood fence around the yard</label>
+<label class="tog"><input type="checkbox" id="siteDrive"> Driveway and front walk</label>
+<p class="hint">The yard saves with the plan, so anyone you share the link with sees the same setting.</p></div>
 <div class="group"><div class="g-title">Walkthrough</div>
 <div class="row"><span class="lbl">Eye height</span><input type="range" id="eyeRange" min="3.5" max="6.8" step="0.1" aria-label="Eye height"><span id="eyeVal" class="val"></span></div>
 <div class="row"><span class="lbl">Walk speed</span><input type="range" id="spdRange" min="2" max="14" step="0.5" value="6" aria-label="Walk speed"><span id="spdVal" class="val"></span></div>
@@ -54,14 +68,64 @@
 <div class="group"><div class="g-title">Furniture catalog</div>
 <input type="search" id="catSearch" class="cat-search" placeholder="Search: queen bed, washer, car…" aria-label="Search the catalog">
 <div id="catChips" class="chips"></div>
+<div class="row"><span class="lbl">Style</span><select id="catStyle" aria-label="Furniture style"><option value="any">Any (default colors)</option><option value="modern">Modern</option><option value="farmhouse">Farmhouse</option><option value="traditional">Traditional</option><option value="midcentury">Mid-century</option><option value="coastal">Coastal</option><option value="industrial">Industrial</option></select></div>
 <div id="catalog" class="cat-grid"></div>
 <p class="hint">Click to add in the middle of the plan, or drag a card onto the plan. Sizes are typical real-world sizes; change them in the selection below.</p></div>
 <div class="group"><div class="g-title" id="inspTitle">Selection</div><div id="inspector"></div></div>
 </section>
+<section class="pane" data-pane="tools">
+<details class="tg" open><summary>Measure</summary>
+<div class="row2"><button class="btn" data-tape>Tape measure</button><button class="btn" data-tapeclear disabled>Clear tapes</button></div>
+<p class="hint">Click two points in the 3D view: floor to ceiling, wall to wall, or the top of a counter. Each tape shows the straight distance plus how far across and how far up.</p>
+<button class="btn" id="personBtn" style="margin-top:10px">Add a 5'10" person for scale</button>
+</details>
+<details class="tg" open><summary>Spacing helpers</summary>
+<label class="tog"><input type="checkbox" id="tRings"> Clearance zones around the selected piece</label>
+<label class="tog"><input type="checkbox" id="tDists"> Distances to walls and furniture</label>
+<label class="tog"><input type="checkbox" id="tSnapAl"> Snap to walls and line up with furniture</label>
+<label class="tog"><input type="checkbox" id="tSwings"> Show every door swing</label>
+<p class="hint">Select a piece of furniture to see the space it needs (teal is clear, red is short) and how far it sits from everything around it. Hold <kbd>Alt</kbd> while dragging to move freely.</p>
+</details>
+<details class="tg" open><summary>Walkways &amp; access</summary>
+<label class="tog"><input type="checkbox" id="tPaths"> Walking paths from the front door</label>
+<label class="tog"><input type="checkbox" id="tAccess"> Wheelchair &amp; aging-in-place checks</label>
+<button class="btn" id="elevBtn" style="margin-top:6px">Wall elevation of the selected wall</button>
+<p class="hint">Paths show the way into every room; red dots mark spots under 36". With the accessibility checks on, the plan shows 5' turning circles and the Check tab adds door widths, grab-bar walls and more.</p>
+</details>
+<details class="tg"><summary>Will it fit?</summary>
+<div class="field"><label for="fitName">Name</label><div class="inp"><input type="text" id="fitName" placeholder="Grandma's hutch"></div></div>
+<div class="fit-dims"><input type="text" id="fitW" class="txt" inputmode="decimal" placeholder="Width 7'" aria-label="Width"><span>×</span><input type="text" id="fitD" class="txt" inputmode="decimal" placeholder="Depth 38&quot;" aria-label="Depth"><span>×</span><input type="text" id="fitH" class="txt" inputmode="decimal" placeholder="Height" aria-label="Height (optional)"></div>
+<button class="btn primary" id="fitBtn" style="margin-top:8px">Check every room</button>
+<div id="fitOut"></div>
+</details>
+<details class="tg"><summary>Floors &amp; roof</summary>
+<div id="floorBox"></div>
+<div class="row" style="margin-top:12px"><span class="lbl">Roof</span><select id="roofStyle" aria-label="Roof style"><option value="none">No roof</option><option value="gable">Gable</option><option value="hip">Hip</option><option value="flat">Flat</option></select></div>
+<div class="roof-only">
+<div class="row"><span class="lbl">Pitch</span><select id="roofPitch" aria-label="Roof pitch"></select></div>
+<div class="row"><span class="lbl">Overhang</span><input id="roofOver" class="txt" inputmode="decimal" aria-label="Overhang"></div>
+<div class="row"><span class="lbl">Material</span><select id="roofMat" aria-label="Roof material"><option value="shingle">Asphalt shingles</option><option value="metal">Standing-seam metal</option></select></div>
+<div class="row"><span class="lbl">Color</span><select id="roofColor" aria-label="Roof color"></select></div>
+<label class="tog"><input type="checkbox" id="roofGut"> Gutters and downspouts</label>
+<label class="tog"><input type="checkbox" id="tRoof"> Show the roof (hides it inside walk mode)</label>
+</div>
+</details>
+<details class="tg" id="notesTg"><summary>Notes from family</summary>
+<div class="field"><label for="noteBy">Your name</label><div class="inp"><input type="text" id="noteBy" placeholder="Mom, Dad, Sam…"></div></div>
+<button class="btn primary" data-noteadd style="margin-top:8px;width:100%">Add a note</button>
+<div id="notesList" class="notes-list"></div>
+<p class="hint">Pin a note anywhere in the plan or the 3D view: "move this window", "bigger closet?". Notes save with the design, so everyone who opens it sees them.</p>
+</details>
+<details class="tg"><summary>Photos, video &amp; shopping</summary>
+<div class="row2"><button class="btn" id="photoBtn">Take a photo</button><button class="btn" id="tourBtn">Day-to-night video</button></div>
+<button class="btn" id="shopBtn" style="margin-top:8px;width:100%">Shopping list</button>
+<p class="hint">Photos render the current view at up to 3× with depth of field. The video circles the house from morning to night (16 seconds). The shopping list and the cost estimate in Specs use the prices you add.</p>
+</details>
+</section>
 <section class="pane" data-pane="check">
 <div class="group"><div class="g-title">Design check</div>
 <p class="hint" style="margin-top:0">Flags door swings that hit things, tight walkways, and fixture clearances while you edit. Click an item to jump to it in the plan.</p>
-<label class="tog"><input type="checkbox" id="tIssues" checked> Show problem areas in the plan and 3D</label>
+<label class="tog"><input type="checkbox" id="tIssues"> Shade all Design Check problem areas</label>
 <div id="checkList"></div></div>
 </section>
 <section class="pane" data-pane="specs">
@@ -87,7 +151,8 @@
 <div id="planWrap"><svg id="plan" role="img" aria-label="Editable floor plan"></svg>
 <div class="plan-tools"><div class="seg" role="group" aria-label="Plan tool"><button data-tool="select" class="on">Select<kbd>V</kbd></button><button data-tool="wall">Draw walls<kbd>B</kbd></button><button data-tool="measure">Measure<kbd>M</kbd></button></div>
 <select id="wallType" aria-label="New wall type"><option value="int">Interior wall</option><option value="ext">Exterior wall</option></select>
-<label class="tog mini"><input type="checkbox" id="tDims" checked> Dimensions</label></div>
+<label class="tog mini"><input type="checkbox" id="tDims" checked> Dimensions</label>
+<div class="seg" id="lvSeg" role="group" aria-label="Floor" hidden><button data-lv="0">1st floor</button><button data-lv="1">2nd floor</button></div></div>
 <button class="btn plan-fit" id="fitPlan">Fit</button>
 <div class="plan-hint">Scroll to zoom · drag empty space to pan · Del removes</div></div>
 <div id="view3d"><div id="labels"></div>
@@ -119,6 +184,9 @@
 <tr><td><kbd>\</kbd></td><td>Toggle side panel</td></tr>
 </table>
 <div class="acts"><button class="btn" id="helpClose">Close</button></div></div></div>
+<div class="modal" id="elevDlg" hidden><div class="card wide"><h2 id="elevTitle">Wall elevation</h2><p class="muted" id="elevSub"></p><div id="elevBox" class="elev-box"></div>
+<div class="acts"><button class="btn" id="elevFlip">Other side</button><button class="btn" id="elevPrint">Print / PDF</button><button class="btn primary" id="elevClose">Close</button></div></div></div>
+<div class="modal" id="xDlg" hidden><div class="card wide"><h2 id="xTitle"></h2><div id="xBody"></div><div class="acts" id="xActs"></div></div></div>
 <div class="modal" id="ioDlg" hidden><div class="card"><h2 id="ioTitle">Plan JSON</h2>
 <p class="muted" id="ioMsg"></p>
 <textarea id="ioText" spellcheck="false" aria-label="Plan JSON"></textarea>
