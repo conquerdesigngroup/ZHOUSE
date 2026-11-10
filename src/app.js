@@ -2,6 +2,9 @@
 'use strict';
 var HEAD_STATIC=__HEAD__;
 var DEFAULT_MODEL=__DEFAULT__;
+// Built-in designs that ship with the page (data/plan-*.json, filled in by build.mjs). Each opens like a saved
+// option; once someone saves it, the saved copy wins over the built-in one.
+var BUILTIN_PLANS=__BUILTINS__;
 
 var $=function(s,r){return (r||document).querySelector(s);};
 var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
@@ -642,7 +645,7 @@ $('#ioCopy').onclick=function(){var txt=$('#ioText').value;if(dlApi){Promise.res
 function copyText(t){try{navigator.clipboard.writeText(t).then(function(){toast('Copied to clipboard');}).catch(function(){$('#ioText').select();toast('Press Ctrl+C to copy');});}catch(e){$('#ioText').select();toast('Press Ctrl+C to copy');}}
 $('#ioFile').onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){$('#ioText').value=r.result;};r.readAsText(f);};
 $('#ioApply').onclick=function(){try{var m=JSON.parse($('#ioText').value);if(!m||!Array.isArray(m.walls))throw new Error('no walls');normalize(m);pushUndo();model=m;select(null);$('#ioDlg').hidden=true;afterChange();goView('ne');toast('Plan loaded');}catch(err){toast('That isn\'t valid plan JSON');}};
-var resetArm=0;$('#resetBtn').onclick=function(){if(Date.now()-resetArm>3000){resetArm=Date.now();toast('Click Reset again to restore the original sketch layout');return;}resetArm=0;pushUndo();model=clone(DEFAULT_MODEL);normalize(model);select(null);afterChange();toast('Reset to the sketch. You can undo this.');};
+var resetArm=0;$('#resetBtn').onclick=function(){if(Date.now()-resetArm>3000){resetArm=Date.now();toast('Click Reset again to restore the original sketch layout');return;}resetArm=0;pushUndo();var bp=BUILTIN_PLANS[store.slot];model=clone(bp?bp.model:DEFAULT_MODEL);normalize(model);select(null);afterChange();toast('Reset to the '+(bp?bp.name+' ':'')+'sketch. You can undo this.');};
 
 /* ---------- plan options (A vs B) + saving across devices ----------
    Each option ("slot") is a whole model. With /api/plan reachable and switched on, options live in
@@ -667,6 +670,12 @@ var backend={
     return Promise.resolve({ok:true,slot:slot,name:name,updated:u});},
   remove:function(slot){if(store.mode==='cloud')return withPass(function(){return api('DELETE',slot);});
     var L=localSlots();delete L[slot];lsSet(LS_SLOTS,JSON.stringify(L));return Promise.resolve({ok:true});}};
+function builtinDoc(slot){var b=Object.prototype.hasOwnProperty.call(BUILTIN_PLANS,slot)?BUILTIN_PLANS[slot]:null;return b?{slot:slot,name:b.name,updated:null,model:clone(b.model)}:null;}
+function readSlot(slot){return backend.read(slot).then(function(d){return d||builtinDoc(slot);},function(e){var b=builtinDoc(slot);if(b)return b;throw e;});}
+// The design list: saved options plus Main plan and any built-in design that hasn't been saved over yet.
+function allDesigns(){var list=store.slots.slice(),cur=store.slot;Object.keys(BUILTIN_PLANS).reverse().forEach(function(k){if(!list.some(function(s){return s.slot===k;}))list.unshift({slot:k,name:BUILTIN_PLANS[k].name,updated:null,builtin:true});});
+  if(!list.some(function(s){return s.slot===cur;}))list.unshift({slot:cur,name:store.name+' (not saved yet)',updated:null});
+  if(!list.some(function(s){return s.slot==='main';}))list.unshift({slot:'main',name:'Main plan',updated:null});return list;}
 function writeSlot(slot,name,m,base){return backend.write(slot,name,m,base,false).then(function(j){
   if(j.error!=='conflict')return j;
   if(!window.confirm('"'+name+'" was saved from another device or tab after you opened it. Replace that version with yours?'))return {ok:false,error:'cancelled'};
@@ -693,15 +702,14 @@ function initStore(){
   fetch('/api/plan',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}).then(function(j){
     store.mode=j&&j.ok&&j.enabled&&j.writable?'cloud':'local';return backend.list();})
   .then(function(list){store.slots=list;var find=function(s){return list.filter(function(o){return o.slot===s;})[0];};
-    if(!find(store.slot)&&store.slot!=='main'){store.slot='main';lsSet(LS_SLOT,null);}
-    if(!find(store.slot))return null;return backend.read(store.slot);})
+    if(!find(store.slot)&&store.slot!=='main'&&!builtinDoc(store.slot)){store.slot='main';lsSet(LS_SLOT,null);}
+    if(!find(store.slot))return builtinDoc(store.slot);return backend.read(store.slot);})
   .then(function(d){if(d)openDoc(d,true);})
   .catch(function(){store.mode='local';})
   .then(function(){store.ready=true;renderSlots();updateDirty();});}
-function renderSlots(){if($('#designName'))$('#designName').textContent=store.name;var cur=store.slot,list=store.slots.slice();if(!list.some(function(s){return s.slot===cur;}))list.unshift({slot:cur,name:store.name+' (not saved yet)'});
-  if(!list.some(function(s){return s.slot==='main';}))list.unshift({slot:'main',name:'Main plan'});
+function renderSlots(){if($('#designName'))$('#designName').textContent=store.name;var cur=store.slot,list=allDesigns();
   $('#slotSel').innerHTML=list.map(function(s){return '<option value="'+esc(s.slot)+'"'+(s.slot===cur?' selected':'')+'>'+esc(s.name)+'</option>';}).join('');
-  var others=store.slots.filter(function(s){return s.slot!==cur;});
+  var others=allDesigns().filter(function(s){return s.slot!==cur&&!/\(not saved yet\)$/.test(s.name)&&(s.slot!=='main'||store.slots.some(function(o){return o.slot==='main';}));});
   $('#slotCmpSel').innerHTML='<option value="">Pick an option…</option>'+others.map(function(s){return '<option value="'+esc(s.slot)+'">'+esc(s.name)+'</option>';}).join('');
   $('#slotCmpBtn').disabled=!others.length;$('#slotDelBtn').disabled=!store.updated;
   $('#saveNote').textContent=artifactApi?'Save stores your changes in this page, so they appear on every device you open it on.':
@@ -711,7 +719,7 @@ function switchSlot(slug){if(slug===store.slot)return;
   if(slug==='main'&&!store.slots.some(function(s){return s.slot==='main';})){if(canonJSON(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
     resetToMain();renderSlots();goView('ne');toast('Opened "Main plan"',1600);return;}
   if(canonJSON(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Switch anyway and drop them?')){renderSlots();return;}
-  backend.read(slug).then(function(d){if(!d){toast('That option couldn\'t be loaded');renderSlots();return;}openDoc(d,false);renderSlots();goView('ne');toast('Opened "'+d.name+'"',1600);})
+  readSlot(slug).then(function(d){if(!d){toast('That option couldn\'t be loaded');renderSlots();return;}openDoc(d,false);renderSlots();goView('ne');toast('Opened "'+d.name+'"',1600);})
   .catch(function(){toast('Couldn\'t reach the server');renderSlots();});}
 function blankModel(){return {specs:{name:'New plan'},walls:[],doors:[],windows:[],rooms:[],items:[],fixtures:[],checkIgnore:[]};}
 // A detached two-car garage, 24' × 24' to wall centers, with a 16' × 7' overhead door.
@@ -734,7 +742,7 @@ function createSlot(){var name=($('#slotName').value||'').trim(),slug=slugOf(nam
   if(!slug){toast('Give the option a name');return;}
   if(slug===store.slot||store.slots.some(function(s){return s.slot===slug;})){toast('There\'s already an option with that name');return;}
   if(start!=='copy'&&canonJSON(model)!==savedJSON&&!window.confirm('"'+store.name+'" has unsaved changes. Start the new option anyway and drop them?'))return;
-  var m=start==='copy'?clone(model):start==='garage'?garageTemplate():start==='sketch'?clone(DEFAULT_MODEL):blankModel();normalize(m);if(start!=='copy')m.specs.name=name;
+  var m=start==='copy'?clone(model):start==='garage'?garageTemplate():start==='sketch'?clone(DEFAULT_MODEL):builtinDoc(start)?builtinDoc(start).model:blankModel();normalize(m);if(start!=='copy')m.specs.name=name;
   writeSlot(slug,name,m,null).then(function(j){if(!j.ok){failMsg(j);return;}openDoc({slot:slug,name:name,updated:j.updated,model:m},false);$('#slotNew').hidden=true;$('#slotName').value='';
     refreshSlots();goView('ne');toast('Created "'+name+'"',1800);}).catch(function(){toast('Couldn\'t reach the server');});}
 function deleteSlot(){if(!store.updated){toast('This option isn\'t saved yet');return;}
@@ -750,7 +758,7 @@ function planStats(m){var keep=model,keepMemo=CK.memo,keepList=CK.list;model=m;C
     return {area:area,rooms:rooms,bw:b.w,bd:b.d,items:m.items.length,openings:m.doors.length+' / '+m.windows.length,fixtures:m.fixtures.length,ceiling:fmt(m.specs.ceiling),n:n};}
   finally{model=keep;CK.memo=keepMemo;CK.list=keepList;}}
 function compareWith(slug){var out=$('#cmpOut');if(!slug){out.innerHTML='';return;}out.innerHTML='<p class="hint">Loading…</p>';
-  backend.read(slug).then(function(d){if(!d){out.innerHTML='<p class="hint">That option couldn\'t be loaded.</p>';return;}normalize(d.model);
+  readSlot(slug).then(function(d){if(!d){out.innerHTML='<p class="hint">That option couldn\'t be loaded.</p>';return;}normalize(d.model);
     var A=planStats(model),B=planStats(d.model),sq=function(v){return v==null?'—':Math.round(v)+' sf';};
     var rows=[['Footprint',fmt(A.bw)+' × '+fmt(A.bd),fmt(B.bw)+' × '+fmt(B.bd)],['Room area',sq(A.area),sq(B.area)],['Ceiling',A.ceiling,B.ceiling],
       ['Doors / windows',A.openings,B.openings],['Furniture',A.items,B.items],['Electrical',A.fixtures,B.fixtures],
@@ -767,9 +775,8 @@ $('#slotNewCancel').onclick=function(){$('#slotNew').hidden=true;};
 $('#slotCreate').onclick=createSlot;
 /* ---------- Designs menu (top bar): the same saved options as Specs > Plan options, one click away ---------- */
 function whenStr(iso){if(!iso)return 'not saved yet';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
-function renderDesignPop(){var cur=store.slot,list=store.slots.slice();if(!list.some(function(s){return s.slot===cur;}))list.unshift({slot:cur,name:store.name,updated:null});
-  if(!list.some(function(s){return s.slot==='main';}))list.unshift({slot:'main',name:'Main plan',updated:null});
-  $('#dpList').innerHTML=list.map(function(s){return '<button class="dp-item'+(s.slot===cur?' on':'')+'" data-slot="'+esc(s.slot)+'"><span>'+esc(s.name)+'</span><small>'+(s.slot===cur?'open now':s.updated?whenStr(s.updated):'starting plan')+'</small></button>';}).join('');
+function renderDesignPop(){var cur=store.slot,list=allDesigns().map(function(s){return s.slot===cur?{slot:cur,name:store.name,updated:s.updated}:s;});
+  $('#dpList').innerHTML=list.map(function(s){return '<button class="dp-item'+(s.slot===cur?' on':'')+'" data-slot="'+esc(s.slot)+'"><span>'+esc(s.name)+'</span><small>'+(s.slot===cur?'open now':s.updated?whenStr(s.updated):s.builtin?'new sketch':'starting plan')+'</small></button>';}).join('');
   $$('.dp-item',$('#dpList')).forEach(function(b){b.onclick=function(){if(b.dataset.slot!==store.slot){closeDesignPop();switchSlot(b.dataset.slot);}};});
   $('#dpRename').value=store.name;
   $('#dpNote').textContent=store.mode==='cloud'?'Designs are saved online, so they open on any device with this link.':'Designs are saved in this browser for now. Once online saving is switched on, they will open on every device.';}

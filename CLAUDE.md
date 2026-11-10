@@ -31,6 +31,11 @@ src/tools.js         design tools (tape, clearances, paths, floors, roof, decor,
                      call hooks defined here (planExtrasSVG, buildExtra, extraChecks, rimBands...).
                      It must not contain the strings __HEAD__, __DEFAULT__ or a closing script tag.
 data/default-plan.json  the house as drafted from the sketch ("Reset to sketch" restores it)
+data/plan-*.json     built-in designs (today: plan-v2.json = "V2", from reference/sketch-v2b.jpeg).
+                     build.mjs embeds every data/plan-<key>.json as BUILTIN_PLANS[<key>] (placeholder
+                     __BUILTINS__); they show in the Designs menu and Specs > Plan options next to
+                     Main plan. Saving one stores a normal option under the same slot, which then wins.
+scripts/make-plan-v2.py  regenerates data/plan-v2.json (edit the numbers there, not the JSON)
 scripts/build.mjs    assembles dist/index.html; also used by dev.mjs and check.mjs
 reference/           original sketch photo + the 2D architectural plan (SVG/PNG)
 ```
@@ -44,7 +49,7 @@ So:
 
 - Keep those four ids and that structure. Don't split app.js into external files or ES modules
   in the built output (a bundler is fine *if* it still emits that exact single-file shape).
-- `app.js` placeholders `__HEAD__` and `__DEFAULT__` are filled by build.mjs. Don't hand-edit them.
+- `app.js` placeholders `__HEAD__`, `__DEFAULT__` and `__BUILTINS__` are filled by build.mjs. Don't hand-edit them.
 - Never write a literal closing script tag in app.js; use `<\/script>` (build fails otherwise).
 - Outside claude.ai (e.g. on Vercel), Save writes the current **plan option** ("slot") through
   `api/plan.js` to Vercel Blob when the deployment has `BLOB_READ_WRITE_TOKEN` and `SAVE_PASSCODE`;
