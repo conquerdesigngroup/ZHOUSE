@@ -5,7 +5,7 @@
 //   PUT    /api/plan?slot=main    body { name, model, base?, force? }    header x-passcode
 //   DELETE /api/plan?slot=main    header x-passcode
 //
-// Storage: Vercel Blob (private store) when BLOB_READ_WRITE_TOKEN is set, otherwise a local folder
+// Storage: Vercel Blob (private store) when BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID (OIDC) is set, otherwise a local folder
 // named by PLAN_DIR (used by `npm run dev`). Reads are open to anyone with the link; writes need
 // the SAVE_PASSCODE environment variable to match the x-passcode header.
 // A PUT carries `base` (the `updated` time the editor loaded). If someone saved in between, it
@@ -95,7 +95,7 @@ async function blobStore() {
 }
 
 async function getStore() {
-  if (process.env.BLOB_READ_WRITE_TOKEN) return blobStore();
+  if (process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID) return blobStore();
   if (process.env.PLAN_DIR) return fileStore(process.env.PLAN_DIR);
   return null;
 }

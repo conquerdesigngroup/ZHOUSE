@@ -38,7 +38,7 @@ Lengths can be typed as `9.5`, `9'6"` or `114"`.
 - **Hosted on claude.ai:** Save writes your changes into the page itself, so every device sees them.
 - **On Vercel:** Save stores the current plan option online (Vercel Blob), so it opens the same on
   any device. It needs two things in the Vercel project: a Blob store connected to the project
-  (Storage → Create → Blob, which adds `BLOB_READ_WRITE_TOKEN`) and an environment variable
+  (Storage → Create → Blob, which adds `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN`) and an environment variable
   `SAVE_PASSCODE`. The first save on each device asks for that passcode. Without them, options are
   kept in the browser.
 - **Plan options:** Specs → Plan options keeps several versions (A, B, the garage…), compares them
