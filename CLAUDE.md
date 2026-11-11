@@ -52,7 +52,7 @@ So:
 - `app.js` placeholders `__HEAD__`, `__DEFAULT__` and `__BUILTINS__` are filled by build.mjs. Don't hand-edit them.
 - Never write a literal closing script tag in app.js; use `<\/script>` (build fails otherwise).
 - Outside claude.ai (e.g. on Vercel), Save writes the current **plan option** ("slot") through
-  `api/plan.js` to Vercel Blob when the deployment has `BLOB_READ_WRITE_TOKEN` and `SAVE_PASSCODE`;
+  `api/plan.js` to Vercel Blob when the deployment has `BLOB_STORE_ID` (OIDC, how Vercel connects new stores) or `BLOB_READ_WRITE_TOKEN`, plus `SAVE_PASSCODE`;
   otherwise options live in this browser's `localStorage` (`house3d-slots-v1`). Unsaved edits are a
   draft in `house3d-draft-v1`, keyed to the slot version they started from. `npm run dev` serves the
   same API from `.dev-plans/` with passcode `dev`.
